@@ -1,0 +1,3351 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Opsiom — Générateur d'image ASCII</title>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+  :root {
+    --bg: #0A0B0E;
+    --surface: #14161B;
+    --surface-2: #1B1E25;
+    --border: #262932;
+    --text: #E7E6E1;
+    --text-dim: #8B8F99;
+    --accent: #E8A33D;
+    --accent-soft: #E8A33D33;
+    --accent-2: #8B7FD1;
+    --danger: #D96A6A;
+
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #F2F0EA;
+      --surface: #FFFFFF;
+      --surface-2: #EAE7DE;
+      --border: #D9D5C8;
+      --text: #201E1B;
+      --text-dim: #6B675F;
+      --accent: #B5701A;
+      --accent-soft: #B5701A22;
+      --accent-2: #6C5CE7;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0A0B0E;
+    --surface: #14161B;
+    --surface-2: #1B1E25;
+    --border: #262932;
+    --text: #E7E6E1;
+    --text-dim: #8B8F99;
+    --accent: #E8A33D;
+    --accent-soft: #E8A33D33;
+    --accent-2: #8B7FD1;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  .shell {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+
+  /* ---------------------------------------------------------
+     HEADER
+  --------------------------------------------------------- */
+
+  header.brand {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+
+  header.brand .title-block h1 {
+    font-family: var(--sans);
+    font-size: clamp(26px, 4vw, 34px);
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  header.brand .title-block h1 span {
+    color: var(--accent);
+  }
+
+  header.brand .title-block p {
+    margin: 6px 0 0;
+    color: var(--text-dim);
+    font-size: 14.5px;
+    max-width: 55ch;
+    line-height: 1.5;
+  }
+
+  .mode-switch {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .mode-switch button {
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 9px 16px;
+    background: var(--surface);
+    color: var(--text-dim);
+    border: none;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+
+  .mode-switch button + button {
+    border-left: 1px solid var(--border);
+  }
+
+  .mode-switch button.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .mode-switch button:hover:not(.active) {
+    color: var(--text);
+  }
+
+  /* ---------------------------------------------------------
+     LAYOUT
+  --------------------------------------------------------- */
+
+  .layout {
+    display: grid;
+    grid-template-columns: 310px minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    .layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .panel,
+  .viewer {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+
+  .panel {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  /* ---------------------------------------------------------
+     FIELDS
+  --------------------------------------------------------- */
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .field label {
+    font-size: 12.5px;
+    color: var(--text-dim);
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .field label .val {
+    color: var(--accent);
+    font-family: var(--mono);
+  }
+
+  .section-title {
+    font-size: 11px;
+    letter-spacing: .02em;
+    color: var(--text-dim);
+    font-family: var(--mono);
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--surface);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--surface);
+  }
+
+  select,
+  input[type="text"],
+  input[type="number"] {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13.5px;
+    padding: 9px 10px;
+    border-radius: 6px;
+    outline: none;
+  }
+
+  select:focus,
+  input[type="text"]:focus,
+  input[type="number"]:focus,
+  textarea:focus {
+    border-color: var(--accent);
+  }
+
+  textarea {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    padding: 10px;
+    border-radius: 6px;
+    outline: none;
+    resize: vertical;
+    min-height: 64px;
+  }
+
+  /* ---------------------------------------------------------
+     SOURCE
+  --------------------------------------------------------- */
+
+  .dropzone {
+    border: 1.5px dashed var(--border);
+    border-radius: 8px;
+    padding: 22px 14px;
+    text-align: center;
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 13px;
+    transition: border-color .15s, background .15s, color .15s;
+  }
+
+  .dropzone.drag {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .dropzone strong {
+    color: var(--text);
+    display: block;
+    margin-bottom: 3px;
+    font-size: 13.5px;
+  }
+
+  .source-info {
+    display: none;
+    padding: 9px 10px;
+    border-radius: 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .source-info.visible {
+    display: block;
+  }
+
+  /* ---------------------------------------------------------
+     TOGGLES
+  --------------------------------------------------------- */
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--text-dim);
+    gap: 15px;
+  }
+
+  .switch {
+    position: relative;
+    width: 38px;
+    height: 21px;
+    flex-shrink: 0;
+  }
+
+  .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .switch .slider {
+    position: absolute;
+    inset: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: .15s;
+  }
+
+  .switch .slider::before {
+    content: "";
+    position: absolute;
+    height: 15px;
+    width: 15px;
+    left: 2px;
+    top: 2px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    transition: .15s;
+  }
+
+  .switch input:checked + .slider {
+    border-color: var(--accent);
+  }
+
+  .switch input:checked + .slider::before {
+    transform: translateX(17px);
+    background: var(--accent);
+  }
+
+  /* ---------------------------------------------------------
+     BUTTONS
+  --------------------------------------------------------- */
+
+  .btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s;
+    width: 100%;
+    text-align: center;
+  }
+
+  .btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .btn.primary {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .btn:disabled {
+    opacity: .4;
+    cursor: not-allowed;
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn-row .btn {
+    flex: 1;
+  }
+
+  .btn-small {
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+
+  /* ---------------------------------------------------------
+     VIEWER
+  --------------------------------------------------------- */
+
+  .viewer {
+    padding: 4px;
+    min-height: 520px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .viewer-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px 8px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 12px;
+    gap: 10px;
+  }
+
+  .viewer-top .dims {
+    color: var(--accent);
+  }
+
+  .viewer-tools {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .zoom-label {
+    min-width: 45px;
+    text-align: center;
+  }
+
+  .zoom-btn {
+    width: 27px;
+    height: 25px;
+    padding: 0;
+    font-family: var(--mono);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--surface-2);
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+
+  .zoom-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .canvas-wrap {
+    flex: 1;
+    background: var(--surface-2);
+    border-radius: 7px;
+    margin: 0 6px 6px;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    min-height: 440px;
+  }
+
+  .canvas-wrap.empty {
+    color: var(--text-dim);
+    font-size: 13.5px;
+    font-family: var(--mono);
+    text-align: center;
+  }
+
+  pre#ascii-out {
+    margin: 0;
+    font-family: var(--mono);
+    line-height: 1;
+    white-space: pre;
+    font-size: var(--cell-size, 8px);
+    letter-spacing: 0;
+    transform-origin: center center;
+  }
+
+  /* ---------------------------------------------------------
+     STATUS / MISC
+  --------------------------------------------------------- */
+
+  .status {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--text-dim);
+    padding: 0 4px;
+    min-height: 16px;
+  }
+
+  .status.error {
+    color: var(--danger);
+  }
+
+  .status.ok {
+    color: var(--accent);
+  }
+
+  .source-stats {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  hr.sep {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0;
+  }
+
+  input[type="file"] {
+    display: none;
+  }
+
+  .advanced {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .hint {
+    font-size: 10.5px;
+    line-height: 1.45;
+    color: var(--text-dim);
+  }
+
+  @media (max-width: 600px) {
+    .shell {
+      padding: 18px 12px 40px;
+    }
+
+    .viewer {
+      min-height: 420px;
+    }
+
+    .canvas-wrap {
+      min-height: 340px;
+    }
+  }
+</style>
+</head>
+
+<body>
+
+<div class="shell">
+
+  <header class="brand">
+    <div class="title-block">
+      <h1>OPSIOM<span>.</span>ascii</h1>
+      <p>
+        Convertis une image ou un texte en glyphes — pour les artefacts,
+        terminaux et documents de l'univers Opsiom.
+      </p>
+    </div>
+
+    <div class="mode-switch">
+      <button id="tab-image" class="active">Image</button>
+      <button id="tab-text">Texte</button>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- =====================================================
+         CONTROL PANEL
+    ====================================================== -->
+
+    <div class="panel">
+
+      <!-- IMAGE SOURCE -->
+      <div id="panel-image">
+
+        <div class="field">
+          <div class="section-title">SOURCE</div>
+        </div>
+
+        <div class="dropzone" id="dropzone">
+          <strong>Dépose une image ici</strong>
+          clique, glisse-dépose, ou colle (Ctrl+V)
+        </div>
+
+        <input type="file" id="file-input" accept="image/*">
+
+        <div class="source-info" id="source-info"></div>
+
+      </div>
+
+      <!-- TEXT SOURCE -->
+      <div id="panel-text" style="display:none;">
+
+        <div class="field">
+          <label>
+            Texte à convertir
+          </label>
+
+          <textarea
+            id="text-input"
+            placeholder="OPSIOM"
+          >OPSIOM</textarea>
+        </div>
+
+        <div class="field">
+          <label>
+            Graisse du tracé
+            <span class="val" id="weight-val">700</span>
+          </label>
+
+          <input
+            type="range"
+            id="text-weight"
+            min="400"
+            max="900"
+            step="100"
+            value="700"
+          >
+        </div>
+
+      </div>
+
+      <hr class="sep">
+
+      <!-- RESOLUTION -->
+      <div class="field">
+
+        <label>
+          Largeur (colonnes)
+          <span class="val" id="cols-val">100</span>
+        </label>
+
+        <input
+          type="range"
+          id="cols"
+          min="30"
+          max="220"
+          value="100"
+        >
+
+      </div>
+
+      <!-- RAMP -->
+      <div class="field">
+
+        <label>Jeu de caractères</label>
+
+        <select id="ramp-preset">
+          <option value="standard">Standard — .:-=+*#%@</option>
+          <option value="dense">Dense — .:;irsXA253hMHGS#9B&@</option>
+          <option value="blocs">Blocs — ░▒▓█</option>
+          <option value="minimal">Minimal — .oO#@</option>
+          <option value="binaire">Binaire — 01</option>
+          <option value="symbols">Symboles — ·:*#@</option>
+          <option value="custom">Personnalisé</option>
+        </select>
+
+      </div>
+
+      <div
+        class="field"
+        id="custom-ramp-field"
+        style="display:none;"
+      >
+        <label>
+          Rampe personnalisée
+          <span class="val">clair → dense</span>
+        </label>
+
+        <input
+          type="text"
+          id="custom-ramp"
+          value=" .:-=+*#%@"
+          maxlength="32"
+        >
+      </div>
+
+      <!-- CONTRAST -->
+      <div class="field">
+
+        <label>
+          Contraste
+          <span class="val" id="contrast-val">1.00</span>
+        </label>
+
+        <input
+          type="range"
+          id="contrast"
+          min="0.4"
+          max="2.2"
+          step="0.05"
+          value="1"
+        >
+
+      </div>
+
+      <!-- BRIGHTNESS -->
+      <div class="field">
+
+        <label>
+          Luminosité
+          <span class="val" id="brightness-val">0.00</span>
+        </label>
+
+        <input
+          type="range"
+          id="brightness"
+          min="-0.3"
+          max="0.3"
+          step="0.02"
+          value="0"
+        >
+
+      </div>
+
+      <!-- QUALITY -->
+      <div class="field">
+
+        <label>
+          Qualité d'échantillonnage
+        </label>
+
+        <select id="sampling">
+          <option value="fast">Rapide</option>
+          <option value="balanced" selected>Équilibrée</option>
+          <option value="quality">Haute qualité</option>
+        </select>
+
+      </div>
+
+      <!-- DITHERING -->
+      <div class="toggle-row">
+
+        <span>Dithering Floyd-Steinberg</span>
+
+        <label class="switch">
+          <input type="checkbox" id="dither">
+          <span class="slider"></span>
+        </label>
+
+      </div>
+
+      <!-- COLOR -->
+      <div class="toggle-row">
+
+        <span>Conserver les couleurs</span>
+
+        <label class="switch">
+          <input type="checkbox" id="color-mode">
+          <span class="slider"></span>
+        </label>
+
+      </div>
+
+      <!-- INVERT -->
+      <div class="toggle-row">
+
+        <span>Inverser la densité</span>
+
+        <label class="switch">
+          <input type="checkbox" id="invert">
+          <span class="slider"></span>
+        </label>
+
+      </div>
+
+      <hr class="sep">
+
+      <!-- EXPORT -->
+      <div class="advanced">
+
+        <div class="section-title">
+          EXPORT
+        </div>
+
+        <div class="field">
+
+          <label>
+            Taille du caractère
+            <span class="val" id="export-size-val">15 px</span>
+          </label>
+
+          <input
+            type="range"
+            id="export-size"
+            min="8"
+            max="32"
+            value="15"
+          >
+
+        </div>
+
+        <div class="toggle-row">
+
+          <span>Fond transparent</span>
+
+          <label class="switch">
+            <input type="checkbox" id="transparent-bg">
+            <span class="slider"></span>
+          </label>
+
+        </div>
+
+      </div>
+
+      <hr class="sep">
+
+      <!-- ACTIONS -->
+      <div class="btn-row">
+
+        <button class="btn" id="btn-copy">
+          Copier
+        </button>
+
+        <button class="btn" id="btn-txt">
+          .txt
+        </button>
+
+      </div>
+
+      <div class="btn-row">
+
+        <button class="btn" id="btn-svg">
+          .svg
+        </button>
+
+        <button class="btn primary" id="btn-png">
+          .png
+        </button>
+
+      </div>
+
+      <button class="btn" id="btn-reset">
+        Réinitialiser
+      </button>
+
+      <div class="source-stats" id="stats"></div>
+
+      <div class="status" id="status"></div>
+
+    </div>
+
+
+    <!-- =====================================================
+         VIEWER
+    ====================================================== -->
+
+    <div class="viewer">
+
+      <div class="viewer-top">
+
+        <span>Aperçu</span>
+
+        <div class="viewer-tools">
+
+          <button
+            class="zoom-btn"
+            id="zoom-out"
+            title="Zoom arrière"
+          >−</button>
+
+          <span
+            class="zoom-label"
+            id="zoom-label"
+          >100%</span>
+
+          <button
+            class="zoom-btn"
+            id="zoom-in"
+            title="Zoom avant"
+          >+</button>
+
+          <button
+            class="zoom-btn"
+            id="zoom-reset"
+            title="Réinitialiser le zoom"
+          >↺</button>
+
+        </div>
+
+        <span
+          class="dims"
+          id="dims-label"
+        >—</span>
+
+      </div>
+
+      <div
+        class="canvas-wrap empty"
+        id="canvas-wrap"
+      >
+        Charge une image ou passe en mode Texte pour commencer
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<!-- =========================================================
+     HIDDEN CANVASES
+========================================================== -->
+
+<canvas id="work-canvas" style="display:none;"></canvas>
+<canvas id="export-canvas" style="display:none;"></canvas>
+
+
+<script>
+(function () {
+
+  "use strict";
+
+  /* =========================================================
+     CONSTANTS
+  ========================================================= */
+
+  const RAMPS = {
+    standard: " .:-=+*#%@",
+    dense: " .:;irsXA253hMHGS#9B&@",
+    blocs: " ░▒▓█",
+    minimal: " .oO#@",
+    binaire: " 01",
+    symbols: " ·:*#@"
+  };
+
+  const DEFAULTS = {
+    cols: 100,
+    ramp: "standard",
+    customRamp: " .:-=+*#%@",
+    contrast: 1,
+    brightness: 0,
+    sampling: "balanced",
+    dither: false,
+    color: false,
+    invert: false,
+    exportSize: 15
+  };
+
+
+  /* =========================================================
+     STATE
+  ========================================================= */
+
+  const state = {
+
+    mode: "image",
+
+    sourceCanvas: null,
+
+    sourceWidth: 0,
+    sourceHeight: 0,
+
+    sourceType: null,
+
+    grid: null,
+
+    zoom: 1,
+
+    converting: false,
+
+    pendingConversion: false
+
+  };
+
+
+  /* =========================================================
+     DOM HELPERS
+  ========================================================= */
+
+  const $ = id => document.getElementById(id);
+
+
+  const tabImage = $("tab-image");
+  const tabText = $("tab-text");
+
+  const panelImage = $("panel-image");
+  const panelText = $("panel-text");
+
+  const dropzone = $("dropzone");
+  const fileInput = $("file-input");
+
+  const sourceInfo = $("source-info");
+
+  const textInput = $("text-input");
+  const textWeight = $("text-weight");
+  const weightVal = $("weight-val");
+
+  const colsSlider = $("cols");
+  const colsVal = $("cols-val");
+
+  const rampPreset = $("ramp-preset");
+  const customField = $("custom-ramp-field");
+  const customRamp = $("custom-ramp");
+
+  const contrastSlider = $("contrast");
+  const contrastVal = $("contrast-val");
+
+  const brightnessSlider = $("brightness");
+  const brightnessVal = $("brightness-val");
+
+  const samplingSelect = $("sampling");
+
+  const ditherMode = $("dither");
+  const colorMode = $("color-mode");
+  const invertMode = $("invert");
+
+  const exportSize = $("export-size");
+  const exportSizeVal = $("export-size-val");
+  const transparentBg = $("transparent-bg");
+
+  const canvasWrap = $("canvas-wrap");
+
+  const dimsLabel = $("dims-label");
+  const statsEl = $("stats");
+  const statusEl = $("status");
+
+  const zoomOut = $("zoom-out");
+  const zoomIn = $("zoom-in");
+  const zoomReset = $("zoom-reset");
+  const zoomLabel = $("zoom-label");
+
+  const workCanvas = $("work-canvas");
+  const exportCanvas = $("export-canvas");
+
+  const btnCopy = $("btn-copy");
+  const btnTxt = $("btn-txt");
+  const btnSvg = $("btn-svg");
+  const btnPng = $("btn-png");
+  const btnReset = $("btn-reset");
+
+
+  /* =========================================================
+     DOWNLOAD CAPABILITY
+  ========================================================= */
+
+  let downloadsCap = null;
+
+  (async () => {
+
+    try {
+
+      if (
+        window.claude &&
+        typeof window.claude.use === "function"
+      ) {
+        downloadsCap = await window.claude.use("downloads");
+      }
+
+    } catch (error) {
+
+      downloadsCap = null;
+
+    }
+
+  })();
+
+
+  /* =========================================================
+     STATUS
+  ========================================================= */
+
+  function setStatus(message, type) {
+
+    statusEl.textContent = message || "";
+
+    statusEl.className =
+      "status" +
+      (type ? " " + type : "");
+
+  }
+
+
+  /* =========================================================
+     SOURCE INFORMATION
+  ========================================================= */
+
+  function updateSourceInfo() {
+
+    if (!state.sourceCanvas) {
+
+      sourceInfo.classList.remove("visible");
+      sourceInfo.textContent = "";
+
+      return;
+    }
+
+    const w = state.sourceWidth;
+    const h = state.sourceHeight;
+
+    sourceInfo.innerHTML =
+      "SOURCE<br>" +
+      `${w.toLocaleString("fr-FR")} × ${h.toLocaleString("fr-FR")} px<br>` +
+      `${state.sourceType === "text" ? "Texte rendu" : "Image"}`;
+
+    sourceInfo.classList.add("visible");
+
+  }
+
+
+  /* =========================================================
+     TAB SWITCHING
+  ========================================================= */
+
+  function switchTab(mode) {
+
+    state.mode = mode;
+
+    tabImage.classList.toggle(
+      "active",
+      mode === "image"
+    );
+
+    tabText.classList.toggle(
+      "active",
+      mode === "text"
+    );
+
+    panelImage.style.display =
+      mode === "image" ? "flex" : "none";
+
+    panelText.style.display =
+      mode === "text" ? "flex" : "none";
+
+    if (mode === "image") {
+
+      panelImage.style.flexDirection = "column";
+      panelImage.style.gap = "10px";
+
+    } else {
+
+      panelText.style.flexDirection = "column";
+      panelText.style.gap = "14px";
+
+      renderTextSource();
+
+    }
+
+  }
+
+
+  tabImage.addEventListener(
+    "click",
+    () => switchTab("image")
+  );
+
+  tabText.addEventListener(
+    "click",
+    () => switchTab("text")
+  );
+
+
+  /* =========================================================
+     IMAGE LOADING
+  ========================================================= */
+
+  function loadImageFile(file) {
+
+    if (
+      !file ||
+      !file.type ||
+      !file.type.startsWith("image/")
+    ) {
+
+      setStatus(
+        "Ce fichier n'est pas une image.",
+        "error"
+      );
+
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
+
+    const img = new Image();
+
+    img.onload = () => {
+
+      try {
+
+        const canvas =
+          document.createElement("canvas");
+
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+
+        const ctx =
+          canvas.getContext("2d", {
+            willReadFrequently: true
+          });
+
+        ctx.drawImage(img, 0, 0);
+
+        state.sourceCanvas = canvas;
+
+        state.sourceWidth = img.naturalWidth;
+        state.sourceHeight = img.naturalHeight;
+        state.sourceType = "image";
+
+        updateSourceInfo();
+
+        setStatus("");
+
+        convertAndRender();
+
+      } catch (error) {
+
+        setStatus(
+          "Impossible de traiter cette image.",
+          "error"
+        );
+
+      } finally {
+
+        URL.revokeObjectURL(url);
+
+      }
+
+    };
+
+    img.onerror = () => {
+
+      URL.revokeObjectURL(url);
+
+      setStatus(
+        "Impossible de lire cette image.",
+        "error"
+      );
+
+    };
+
+    img.src = url;
+
+  }
+
+
+  dropzone.addEventListener(
+    "click",
+    () => fileInput.click()
+  );
+
+
+  fileInput.addEventListener(
+    "change",
+    event => {
+
+      const file =
+        event.target.files &&
+        event.target.files[0];
+
+      if (file) {
+        loadImageFile(file);
+      }
+
+      fileInput.value = "";
+
+    }
+  );
+
+
+  ["dragenter", "dragover"].forEach(eventName => {
+
+    dropzone.addEventListener(
+      eventName,
+      event => {
+
+        event.preventDefault();
+
+        dropzone.classList.add("drag");
+
+      }
+    );
+
+  });
+
+
+  ["dragleave", "drop"].forEach(eventName => {
+
+    dropzone.addEventListener(
+      eventName,
+      event => {
+
+        event.preventDefault();
+
+        dropzone.classList.remove("drag");
+
+      }
+    );
+
+  });
+
+
+  dropzone.addEventListener(
+    "drop",
+    event => {
+
+      const file =
+        event.dataTransfer.files &&
+        event.dataTransfer.files[0];
+
+      if (file) {
+        loadImageFile(file);
+      }
+
+    }
+  );
+
+
+  window.addEventListener(
+    "paste",
+    event => {
+
+      if (state.mode !== "image") {
+        return;
+      }
+
+      const items =
+        event.clipboardData &&
+        event.clipboardData.items;
+
+      if (!items) {
+        return;
+      }
+
+      for (const item of items) {
+
+        if (item.type.startsWith("image/")) {
+
+          loadImageFile(
+            item.getAsFile()
+          );
+
+          break;
+
+        }
+
+      }
+
+    }
+  );
+
+
+  /* =========================================================
+     TEXT SOURCE
+  ========================================================= */
+
+  function renderTextSource() {
+
+    const text =
+      (textInput.value || "OPSIOM").trim() ||
+      "OPSIOM";
+
+    const weight = textWeight.value;
+
+    const c =
+      document.createElement("canvas");
+
+    const measureCanvas =
+      document.createElement("canvas");
+
+    const measureCtx =
+      measureCanvas.getContext("2d");
+
+    const fontSize = 160;
+
+    measureCtx.font =
+      `${weight} ${fontSize}px "Space Grotesk", sans-serif`;
+
+    const metrics =
+      measureCtx.measureText(text);
+
+    const pad =
+      fontSize * 0.30;
+
+    c.width =
+      Math.max(
+        200,
+        Math.ceil(metrics.width + pad * 2)
+      );
+
+    c.height =
+      Math.ceil(fontSize * 1.35);
+
+    const ctx =
+      c.getContext("2d");
+
+    ctx.fillStyle = "#000000";
+
+    ctx.fillRect(
+      0,
+      0,
+      c.width,
+      c.height
+    );
+
+    ctx.fillStyle = "#FFFFFF";
+
+    ctx.font =
+      `${weight} ${fontSize}px "Space Grotesk", sans-serif`;
+
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+
+    ctx.fillText(
+      text,
+      c.width / 2,
+      c.height / 2 + fontSize * 0.05
+    );
+
+    state.sourceCanvas = c;
+
+    state.sourceWidth = c.width;
+    state.sourceHeight = c.height;
+    state.sourceType = "text";
+
+    updateSourceInfo();
+
+    convertAndRender();
+
+  }
+
+
+  /* =========================================================
+     FONT METRICS
+  ========================================================= */
+
+  function getCharacterAspect() {
+
+    const canvas =
+      document.createElement("canvas");
+
+    const ctx =
+      canvas.getContext("2d");
+
+    ctx.font =
+      '16px "JetBrains Mono", monospace';
+
+    const metrics =
+      ctx.measureText("M");
+
+    const width =
+      metrics.width || 9.63;
+
+    /*
+      Approximation of the visual cell ratio.
+
+      A monospace character is normally narrower
+      than it is high.
+    */
+
+    return Math.max(
+      0.42,
+      Math.min(
+        0.65,
+        width / 16
+      )
+    );
+
+  }
+
+
+  /* =========================================================
+     RAMPS
+  ========================================================= */
+
+  function getRamp() {
+
+    if (rampPreset.value === "custom") {
+
+      const value =
+        customRamp.value || DEFAULTS.customRamp;
+
+      return value.length >= 2
+        ? value
+        : DEFAULTS.customRamp;
+
+    }
+
+    return (
+      RAMPS[rampPreset.value] ||
+      RAMPS.standard
+    );
+
+  }
+
+
+  /* =========================================================
+     LUMINANCE
+  ========================================================= */
+
+  function luminance(r, g, b) {
+
+    return (
+      0.2126 * r +
+      0.7152 * g +
+      0.0722 * b
+    ) / 255;
+
+  }
+
+
+  /* =========================================================
+     SAMPLE SOURCE
+  ========================================================= */
+
+  function sampleCell(
+    sourceCtx,
+    sourceWidth,
+    sourceHeight,
+    x,
+    y,
+    cols,
+    rows,
+    quality
+  ) {
+
+    /*
+      "fast" samples the center pixel.
+
+      "balanced" samples a small 2×2 area.
+
+      "quality" samples an adaptive 3×3 area.
+    */
+
+    const sx =
+      x * sourceWidth / cols;
+
+    const sy =
+      y * sourceHeight / rows;
+
+    const ex =
+      (x + 1) * sourceWidth / cols;
+
+    const ey =
+      (y + 1) * sourceHeight / rows;
+
+    if (quality === "fast") {
+
+      const px =
+        Math.min(
+          sourceWidth - 1,
+          Math.floor((sx + ex) / 2)
+        );
+
+      const py =
+        Math.min(
+          sourceHeight - 1,
+          Math.floor((sy + ey) / 2)
+        );
+
+      const data =
+        sourceCtx.getImageData(
+          px,
+          py,
+          1,
+          1
+        ).data;
+
+      return {
+        r: data[0],
+        g: data[1],
+        b: data[2],
+        lum: luminance(
+          data[0],
+          data[1],
+          data[2]
+        )
+      };
+
+    }
+
+
+    const samples =
+      quality === "quality" ? 3 : 2;
+
+    let totalR = 0;
+    let totalG = 0;
+    let totalB = 0;
+    let count = 0;
+
+    for (let syi = 0; syi < samples; syi++) {
+
+      const py =
+        Math.min(
+          sourceHeight - 1,
+          Math.floor(
+            sy +
+            ((syi + 0.5) / samples) *
+            Math.max(1, ey - sy)
+          )
+        );
+
+      for (let sxi = 0; sxi < samples; sxi++) {
+
+        const px =
+          Math.min(
+            sourceWidth - 1,
+            Math.floor(
+              sx +
+              ((sxi + 0.5) / samples) *
+              Math.max(1, ex - sx)
+            )
+          );
+
+        const pixel =
+          sourceCtx.getImageData(
+            px,
+            py,
+            1,
+            1
+          ).data;
+
+        totalR += pixel[0];
+        totalG += pixel[1];
+        totalB += pixel[2];
+
+        count++;
+
+      }
+
+    }
+
+    const r = totalR / count;
+    const g = totalG / count;
+    const b = totalB / count;
+
+    return {
+      r,
+      g,
+      b,
+      lum: luminance(r, g, b)
+    };
+
+  }
+
+
+  /* =========================================================
+     DITHERING
+  ========================================================= */
+
+  function applyFloydSteinberg(values, cols, rows) {
+
+    const output =
+      new Float32Array(values);
+
+    function add(x, y, error, factor) {
+
+      if (
+        x < 0 ||
+        x >= cols ||
+        y < 0 ||
+        y >= rows
+      ) {
+        return;
+      }
+
+      output[y * cols + x] +=
+        error * factor;
+
+    }
+
+    for (let y = 0; y < rows; y++) {
+
+      for (let x = 0; x < cols; x++) {
+
+        const index =
+          y * cols + x;
+
+        const oldValue =
+          Math.max(
+            0,
+            Math.min(
+              1,
+              output[index]
+            )
+          );
+
+        output[index] =
+          oldValue;
+
+        /*
+          The actual quantization happens later.
+          We propagate the error relative to
+          the nearest ramp level.
+        */
+
+        add(
+          x + 1,
+          y,
+          oldValue - Math.round(oldValue * 255) / 255,
+          7 / 16
+        );
+
+        add(
+          x - 1,
+          y + 1,
+          oldValue - Math.round(oldValue * 255) / 255,
+          3 / 16
+        );
+
+        add(
+          x,
+          y + 1,
+          oldValue - Math.round(oldValue * 255) / 255,
+          5 / 16
+        );
+
+        add(
+          x + 1,
+          y + 1,
+          oldValue - Math.round(oldValue * 255) / 255,
+          1 / 16
+        );
+
+      }
+
+    }
+
+    return output;
+
+  }
+
+
+  /* =========================================================
+     CONVERSION
+  ========================================================= */
+
+  function convertAndRender() {
+
+    if (!state.sourceCanvas) {
+      return;
+    }
+
+    /*
+      If a conversion is already running, schedule
+      exactly one more conversion instead of stacking
+      hundreds of them while a slider is moving.
+    */
+
+    if (state.converting) {
+
+      state.pendingConversion = true;
+
+      return;
+
+    }
+
+    state.converting = true;
+
+    requestAnimationFrame(() => {
+
+      try {
+
+        performConversion();
+
+      } catch (error) {
+
+        console.error(error);
+
+        setStatus(
+          "Erreur pendant la conversion.",
+          "error"
+        );
+
+      } finally {
+
+        state.converting = false;
+
+        if (state.pendingConversion) {
+
+          state.pendingConversion = false;
+
+          convertAndRender();
+
+        }
+
+      }
+
+    });
+
+  }
+
+
+  function performConversion() {
+
+    const src =
+      state.sourceCanvas;
+
+    const cols =
+      parseInt(
+        colsSlider.value,
+        10
+      );
+
+    const charAspect =
+      getCharacterAspect();
+
+    let rows =
+      Math.max(
+        1,
+        Math.round(
+          cols *
+          (src.height / src.width) *
+          charAspect
+        )
+      );
+
+    rows =
+      Math.min(
+        rows,
+        400
+      );
+
+    /*
+      Instead of shrinking the source to the ASCII
+      resolution, we keep the source at its natural
+      size and sample areas from it.
+    */
+
+    const sourceCtx =
+      src.getContext(
+        "2d",
+        {
+          willReadFrequently: true
+        }
+      );
+
+    const ramp =
+      getRamp();
+
+    const contrast =
+      parseFloat(
+        contrastSlider.value
+      );
+
+    const brightness =
+      parseFloat(
+        brightnessSlider.value
+      );
+
+    const invert =
+      invertMode.checked;
+
+    const useColor =
+      colorMode.checked;
+
+    const quality =
+      samplingSelect.value;
+
+    /*
+      Cache source image data once.
+
+      This is significantly faster than calling
+      getImageData() for every individual cell.
+    */
+
+    const sourceData =
+      sourceCtx.getImageData(
+        0,
+        0,
+        src.width,
+        src.height
+      ).data;
+
+
+    function getSampleFromData(
+      x,
+      y
+    ) {
+
+      const sx =
+        x * src.width / cols;
+
+      const sy =
+        y * src.height / rows;
+
+      const ex =
+        (x + 1) * src.width / cols;
+
+      const ey =
+        (y + 1) * src.height / rows;
+
+
+      if (quality === "fast") {
+
+        const px =
+          Math.min(
+            src.width - 1,
+            Math.floor((sx + ex) / 2)
+          );
+
+        const py =
+          Math.min(
+            src.height - 1,
+            Math.floor((sy + ey) / 2)
+          );
+
+        const index =
+          (py * src.width + px) * 4;
+
+        const r =
+          sourceData[index];
+
+        const g =
+          sourceData[index + 1];
+
+        const b =
+          sourceData[index + 2];
+
+        return {
+          r,
+          g,
+          b,
+          lum: luminance(r, g, b)
+        };
+
+      }
+
+
+      const samples =
+        quality === "quality" ? 3 : 2;
+
+      let totalR = 0;
+      let totalG = 0;
+      let totalB = 0;
+      let count = 0;
+
+      for (
+        let syi = 0;
+        syi < samples;
+        syi++
+      ) {
+
+        const py =
+          Math.min(
+            src.height - 1,
+            Math.floor(
+              sy +
+              ((syi + 0.5) / samples) *
+              Math.max(1, ey - sy)
+            )
+          );
+
+        for (
+          let sxi = 0;
+          sxi < samples;
+          sxi++
+        ) {
+
+          const px =
+            Math.min(
+              src.width - 1,
+              Math.floor(
+                sx +
+                ((sxi + 0.5) / samples) *
+                Math.max(1, ex - sx)
+              )
+            );
+
+          const index =
+            (py * src.width + px) * 4;
+
+          totalR += sourceData[index];
+          totalG += sourceData[index + 1];
+          totalB += sourceData[index + 2];
+
+          count++;
+
+        }
+
+      }
+
+      const r =
+        totalR / count;
+
+      const g =
+        totalG / count;
+
+      const b =
+        totalB / count;
+
+      return {
+        r,
+        g,
+        b,
+        lum: luminance(r, g, b)
+      };
+
+    }
+
+
+    const luminances =
+      new Float32Array(
+        cols * rows
+      );
+
+    const colors =
+      new Array(
+        cols * rows
+      );
+
+
+    for (let y = 0; y < rows; y++) {
+
+      for (let x = 0; x < cols; x++) {
+
+        const index =
+          y * cols + x;
+
+        const sample =
+          getSampleFromData(
+            x,
+            y
+          );
+
+        let lum =
+          sample.lum;
+
+        lum =
+          (lum - 0.5) *
+          contrast +
+          0.5 +
+          brightness;
+
+        lum =
+          Math.max(
+            0,
+            Math.min(
+              1,
+              lum
+            )
+          );
+
+        luminances[index] =
+          lum;
+
+        colors[index] = {
+          r: Math.round(sample.r),
+          g: Math.round(sample.g),
+          b: Math.round(sample.b)
+        };
+
+      }
+
+    }
+
+
+    /*
+      Dithering.
+
+      We apply it to the normalized luminance
+      before converting it to a ramp character.
+    */
+
+    let processedLum =
+      luminances;
+
+    if (ditherMode.checked) {
+
+      processedLum =
+        applyFloydSteinberg(
+          luminances,
+          cols,
+          rows
+        );
+
+    }
+
+
+    const gridChars = [];
+
+    for (let y = 0; y < rows; y++) {
+
+      const row = [];
+
+      for (let x = 0; x < cols; x++) {
+
+        const index =
+          y * cols + x;
+
+        let lum =
+          Math.max(
+            0,
+            Math.min(
+              1,
+              processedLum[index]
+            )
+          );
+
+        let rampIndex =
+          Math.round(
+            lum *
+            (ramp.length - 1)
+          );
+
+        /*
+          Normal mode:
+          black → dense character
+          white → light character
+        */
+
+        if (!invert) {
+
+          rampIndex =
+            ramp.length -
+            1 -
+            rampIndex;
+
+        }
+
+        rampIndex =
+          Math.max(
+            0,
+            Math.min(
+              ramp.length - 1,
+              rampIndex
+            )
+          );
+
+        const color =
+          colors[index];
+
+        row.push({
+          ch: ramp[rampIndex],
+          r: color.r,
+          g: color.g,
+          b: color.b
+        });
+
+      }
+
+      gridChars.push(row);
+
+    }
+
+
+    state.grid = {
+      cols,
+      rows,
+      chars: gridChars
+    };
+
+    renderGrid();
+
+    updateStats();
+
+  }
+
+
+  /* =========================================================
+     RENDER GRID
+  ========================================================= */
+
+  function renderGrid() {
+
+    if (!state.grid) {
+      return;
+    }
+
+    const {
+      cols,
+      rows,
+      chars
+    } = state.grid;
+
+    canvasWrap.classList.remove(
+      "empty"
+    );
+
+    let pre =
+      document.getElementById(
+        "ascii-out"
+      );
+
+    if (!pre) {
+
+      pre =
+        document.createElement(
+          "pre"
+        );
+
+      pre.id =
+        "ascii-out";
+
+      canvasWrap.innerHTML = "";
+
+      canvasWrap.appendChild(
+        pre
+      );
+
+    }
+
+    const useColor =
+      colorMode.checked;
+
+    const baseCellSize =
+      Math.max(
+        4,
+        Math.min(
+          10,
+          Math.floor(
+            900 / cols
+          )
+        )
+      );
+
+    pre.style.setProperty(
+      "--cell-size",
+      baseCellSize + "px"
+    );
+
+    pre.style.transform =
+      `scale(${state.zoom})`;
+
+
+    if (!useColor) {
+
+      const lines =
+        new Array(rows);
+
+      for (let y = 0; y < rows; y++) {
+
+        let line = "";
+
+        for (
+          let x = 0;
+          x < cols;
+          x++
+        ) {
+
+          line +=
+            chars[y][x].ch;
+
+        }
+
+        lines[y] = line;
+
+      }
+
+      pre.style.color =
+        "var(--text)";
+
+      pre.textContent =
+        lines.join("\n");
+
+    } else {
+
+      const fragment =
+        document.createDocumentFragment();
+
+      for (let y = 0; y < rows; y++) {
+
+        let runColor = null;
+        let runString = "";
+
+        const lineSpans = [];
+
+        for (
+          let x = 0;
+          x < cols;
+          x++
+        ) {
+
+          const cell =
+            chars[y][x];
+
+          const color =
+            `rgb(${cell.r},${cell.g},${cell.b})`;
+
+          if (color !== runColor) {
+
+            if (runString) {
+
+              lineSpans.push({
+                color: runColor,
+                text: runString
+              });
+
+            }
+
+            runColor = color;
+            runString = cell.ch;
+
+          } else {
+
+            runString += cell.ch;
+
+          }
+
+        }
+
+        if (runString) {
+
+          lineSpans.push({
+            color: runColor,
+            text: runString
+          });
+
+        }
+
+        lineSpans.forEach(spanData => {
+
+          const span =
+            document.createElement(
+              "span"
+            );
+
+          span.style.color =
+            spanData.color;
+
+          span.textContent =
+            spanData.text;
+
+          fragment.appendChild(
+            span
+          );
+
+        });
+
+        fragment.appendChild(
+          document.createTextNode("\n")
+        );
+
+      }
+
+      pre.textContent = "";
+
+      pre.appendChild(
+        fragment
+      );
+
+    }
+
+    dimsLabel.textContent =
+      `${cols} × ${rows}`;
+
+  }
+
+
+  /* =========================================================
+     STATS
+  ========================================================= */
+
+  function updateStats() {
+
+    if (!state.grid) {
+      statsEl.textContent = "";
+      return;
+    }
+
+    const {
+      cols,
+      rows
+    } = state.grid;
+
+    const characters =
+      cols * rows;
+
+    const source =
+      state.sourceCanvas;
+
+    statsEl.innerHTML =
+      `SOURCE ${source.width} × ${source.height}<br>` +
+      `SORTIE ${cols} × ${rows} · ` +
+      `${characters.toLocaleString("fr-FR")} caractères`;
+
+  }
+
+
+  /* =========================================================
+     PLAIN TEXT
+  ========================================================= */
+
+  function plainText() {
+
+    if (!state.grid) {
+      return "";
+    }
+
+    return state.grid.chars
+      .map(row =>
+        row
+          .map(cell => cell.ch)
+          .join("")
+      )
+      .join("\n");
+
+  }
+
+
+  /* =========================================================
+     CONTROL EVENTS
+  ========================================================= */
+
+  function liveConvert() {
+    convertAndRender();
+  }
+
+
+  colsSlider.addEventListener(
+    "input",
+    () => {
+
+      colsVal.textContent =
+        colsSlider.value;
+
+      liveConvert();
+
+    }
+  );
+
+
+  contrastSlider.addEventListener(
+    "input",
+    () => {
+
+      contrastVal.textContent =
+        parseFloat(
+          contrastSlider.value
+        ).toFixed(2);
+
+      liveConvert();
+
+    }
+  );
+
+
+  brightnessSlider.addEventListener(
+    "input",
+    () => {
+
+      brightnessVal.textContent =
+        parseFloat(
+          brightnessSlider.value
+        ).toFixed(2);
+
+      liveConvert();
+
+    }
+  );
+
+
+  rampPreset.addEventListener(
+    "change",
+    () => {
+
+      customField.style.display =
+        rampPreset.value === "custom"
+          ? "flex"
+          : "none";
+
+      liveConvert();
+
+    }
+  );
+
+
+  customRamp.addEventListener(
+    "input",
+    liveConvert
+  );
+
+
+  samplingSelect.addEventListener(
+    "change",
+    liveConvert
+  );
+
+
+  ditherMode.addEventListener(
+    "change",
+    liveConvert
+  );
+
+
+  colorMode.addEventListener(
+    "change",
+    renderGrid
+  );
+
+
+  invertMode.addEventListener(
+    "change",
+    liveConvert
+  );
+
+
+  textInput.addEventListener(
+    "input",
+    debounce(
+      renderTextSource,
+      180
+    )
+  );
+
+
+  textWeight.addEventListener(
+    "input",
+    () => {
+
+      weightVal.textContent =
+        textWeight.value;
+
+    }
+  );
+
+
+  textWeight.addEventListener(
+    "change",
+    renderTextSource
+  );
+
+
+  exportSize.addEventListener(
+    "input",
+    () => {
+
+      exportSizeVal.textContent =
+        `${exportSize.value} px`;
+
+    }
+  );
+
+
+  /* =========================================================
+     DEBOUNCE
+  ========================================================= */
+
+  function debounce(
+    fn,
+    delay
+  ) {
+
+    let timer = null;
+
+    return (...args) => {
+
+      clearTimeout(timer);
+
+      timer =
+        setTimeout(
+          () => fn(...args),
+          delay
+        );
+
+    };
+
+  }
+
+
+  /* =========================================================
+     ZOOM
+  ========================================================= */
+
+  function updateZoom() {
+
+    state.zoom =
+      Math.max(
+        0.5,
+        Math.min(
+          2.5,
+          Math.round(
+            state.zoom * 100
+          ) / 100
+        )
+      );
+
+    zoomLabel.textContent =
+      `${Math.round(state.zoom * 100)}%`;
+
+    renderGrid();
+
+  }
+
+
+  zoomOut.addEventListener(
+    "click",
+    () => {
+
+      state.zoom -= 0.1;
+
+      updateZoom();
+
+    }
+  );
+
+
+  zoomIn.addEventListener(
+    "click",
+    () => {
+
+      state.zoom += 0.1;
+
+      updateZoom();
+
+    }
+  );
+
+
+  zoomReset.addEventListener(
+    "click",
+    () => {
+
+      state.zoom = 1;
+
+      updateZoom();
+
+    }
+  );
+
+
+  /* =========================================================
+     COPY
+  ========================================================= */
+
+  btnCopy.addEventListener(
+    "click",
+    async () => {
+
+      const text =
+        plainText();
+
+      if (!text) {
+
+        setStatus(
+          "Rien à copier pour le moment.",
+          "error"
+        );
+
+        return;
+
+      }
+
+      try {
+
+        await navigator.clipboard.writeText(
+          text
+        );
+
+        setStatus(
+          "Copié dans le presse-papiers.",
+          "ok"
+        );
+
+      } catch (error) {
+
+        setStatus(
+          "La copie a échoué dans cet environnement.",
+          "error"
+        );
+
+      }
+
+    }
+  );
+
+
+  /* =========================================================
+     DOWNLOAD FALLBACK
+  ========================================================= */
+
+  function browserDownload(
+    filename,
+    data,
+    mimeType
+  ) {
+
+    const blob =
+      data instanceof Blob
+        ? data
+        : new Blob(
+            [data],
+            { type: mimeType }
+          );
+
+    const url =
+      URL.createObjectURL(blob);
+
+    const anchor =
+      document.createElement("a");
+
+    anchor.href = url;
+    anchor.download = filename;
+
+    document.body.appendChild(anchor);
+
+    anchor.click();
+
+    anchor.remove();
+
+    setTimeout(
+      () => URL.revokeObjectURL(url),
+      1000
+    );
+
+  }
+
+
+  async function offerDownload(
+    filename,
+    data,
+    mimeType
+  ) {
+
+    if (downloadsCap) {
+
+      try {
+
+        await downloadsCap.save({
+          filename,
+          data
+        });
+
+        setStatus(
+          "Fichier enregistré.",
+          "ok"
+        );
+
+        return;
+
+      } catch (error) {
+
+        /*
+          If the host rejects the download,
+          use the normal browser mechanism.
+        */
+
+        if (
+          error &&
+          error.code === "declined"
+        ) {
+
+          setStatus(
+            "Téléchargement annulé.",
+            ""
+          );
+
+          return;
+
+        }
+
+      }
+
+    }
+
+    try {
+
+      browserDownload(
+        filename,
+        data,
+        mimeType
+      );
+
+      setStatus(
+        "Fichier téléchargé.",
+        "ok"
+      );
+
+    } catch (error) {
+
+      setStatus(
+        "Le téléchargement a échoué.",
+        "error"
+      );
+
+    }
+
+  }
+
+
+  /* =========================================================
+     TXT EXPORT
+  ========================================================= */
+
+  btnTxt.addEventListener(
+    "click",
+    () => {
+
+      const text =
+        plainText();
+
+      if (!text) {
+
+        setStatus(
+          "Rien à exporter pour le moment.",
+          "error"
+        );
+
+        return;
+
+      }
+
+      offerDownload(
+        "opsiom-ascii.txt",
+        text,
+        "text/plain;charset=utf-8"
+      );
+
+    }
+  );
+
+
+  /* =========================================================
+     SVG EXPORT
+  ========================================================= */
+
+  function escapeXml(value) {
+
+    return String(value)
+      .replace(
+        /&/g,
+        "&amp;"
+      )
+      .replace(
+        /</g,
+        "&lt;"
+      )
+      .replace(
+        />/g,
+        "&gt;"
+      )
+      .replace(
+        /"/g,
+        "&quot;"
+      )
+      .replace(
+        /'/g,
+        "&apos;"
+      );
+
+  }
+
+
+  function createSVG() {
+
+    if (!state.grid) {
+      return null;
+    }
+
+    const {
+      cols,
+      rows,
+      chars
+    } = state.grid;
+
+    const fontSize =
+      parseInt(
+        exportSize.value,
+        10
+      );
+
+    const charAspect =
+      getCharacterAspect();
+
+    const cellW =
+      Math.max(
+        1,
+        fontSize * charAspect
+      );
+
+    const cellH =
+      fontSize;
+
+    const width =
+      Math.ceil(
+        cols * cellW
+      );
+
+    const height =
+      Math.ceil(
+        rows * cellH
+      );
+
+    const useColor =
+      colorMode.checked;
+
+    const dark =
+      !(
+        window.matchMedia &&
+        window.matchMedia(
+          "(prefers-color-scheme: light)"
+        ).matches
+      );
+
+    const background =
+      dark
+        ? "#0A0B0E"
+        : "#F2F0EA";
+
+    let svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" ` +
+      `width="${width}" ` +
+      `height="${height}" ` +
+      `viewBox="0 0 ${width} ${height}">`;
+
+    if (!transparentBg.checked) {
+
+      svg +=
+        `<rect width="100%" height="100%" ` +
+        `fill="${background}"/>`;
+
+    }
+
+    svg +=
+      `<text ` +
+      `font-family="JetBrains Mono, monospace" ` +
+      `font-size="${fontSize}px" ` +
+      `dominant-baseline="text-before-edge">`;
+
+    for (let y = 0; y < rows; y++) {
+
+      let currentColor = null;
+      let currentText = "";
+      let currentX = 0;
+
+      for (
+        let x = 0;
+        x < cols;
+        x++
+      ) {
+
+        const cell =
+          chars[y][x];
+
+        const color =
+          useColor
+            ? `rgb(${cell.r},${cell.g},${cell.b})`
+            : (
+              dark
+                ? "#E8A33D"
+                : "#B5701A"
+            );
+
+        if (
+          currentColor !== null &&
+          color !== currentColor
+        ) {
+
+          svg +=
+            `<tspan x="${currentX}" ` +
+            `y="${y * cellH}" ` +
+            `fill="${currentColor}">` +
+            `${escapeXml(currentText)}` +
+            `</tspan>`;
+
+          currentText = "";
+          currentX =
+            x * cellW;
+
+        }
+
+        if (currentColor === null) {
+          currentX =
+            x * cellW;
+        }
+
+        currentColor = color;
+        currentText += cell.ch;
+
+      }
+
+      if (currentText) {
+
+        svg +=
+          `<tspan x="${currentX}" ` +
+          `y="${y * cellH}" ` +
+          `fill="${currentColor}">` +
+          `${escapeXml(currentText)}` +
+          `</tspan>`;
+
+      }
+
+    }
+
+    svg += "</text></svg>";
+
+    return svg;
+
+  }
+
+
+  btnSvg.addEventListener(
+    "click",
+    () => {
+
+      const svg =
+        createSVG();
+
+      if (!svg) {
+
+        setStatus(
+          "Rien à exporter pour le moment.",
+          "error"
+        );
+
+        return;
+
+      }
+
+      offerDownload(
+        "opsiom-ascii.svg",
+        svg,
+        "image/svg+xml;charset=utf-8"
+      );
+
+    }
+  );
+
+
+  /* =========================================================
+     PNG EXPORT
+  ========================================================= */
+
+  btnPng.addEventListener(
+    "click",
+    () => {
+
+      if (!state.grid) {
+
+        setStatus(
+          "Rien à exporter pour le moment.",
+          "error"
+        );
+
+        return;
+
+      }
+
+      const {
+        cols,
+        rows,
+        chars
+      } = state.grid;
+
+      const cellH =
+        parseInt(
+          exportSize.value,
+          10
+        );
+
+      const charAspect =
+        getCharacterAspect();
+
+      const cellW =
+        Math.max(
+          1,
+          Math.round(
+            cellH * charAspect
+          )
+        );
+
+      exportCanvas.width =
+        cols * cellW;
+
+      exportCanvas.height =
+        rows * cellH;
+
+      const ctx =
+        exportCanvas.getContext(
+          "2d"
+        );
+
+      const isDark =
+        !(
+          window.matchMedia &&
+          window.matchMedia(
+            "(prefers-color-scheme: light)"
+          ).matches
+        );
+
+      /*
+        Transparent export.
+      */
+
+      if (transparentBg.checked) {
+
+        ctx.clearRect(
+          0,
+          0,
+          exportCanvas.width,
+          exportCanvas.height
+        );
+
+      } else {
+
+        ctx.fillStyle =
+          isDark
+            ? "#0A0B0E"
+            : "#F2F0EA";
+
+        ctx.fillRect(
+          0,
+          0,
+          exportCanvas.width,
+          exportCanvas.height
+        );
+
+      }
+
+      ctx.font =
+        `${cellH}px "JetBrains Mono", monospace`;
+
+      ctx.textBaseline =
+        "top";
+
+      ctx.textRendering =
+        "geometricPrecision";
+
+      const useColor =
+        colorMode.checked;
+
+      const defaultColor =
+        isDark
+          ? "#E8A33D"
+          : "#B5701A";
+
+      for (
+        let y = 0;
+        y < rows;
+        y++
+      ) {
+
+        for (
+          let x = 0;
+          x < cols;
+          x++
+        ) {
+
+          const cell =
+            chars[y][x];
+
+          ctx.fillStyle =
+            useColor
+              ? `rgb(${cell.r},${cell.g},${cell.b})`
+              : defaultColor;
+
+          ctx.fillText(
+            cell.ch,
+            x * cellW,
+            y * cellH
+          );
+
+        }
+
+      }
+
+      exportCanvas.toBlob(
+        blob => {
+
+          if (!blob) {
+
+            setStatus(
+              "Impossible de générer le PNG.",
+              "error"
+            );
+
+            return;
+
+          }
+
+          offerDownload(
+            "opsiom-ascii.png",
+            blob,
+            "image/png"
+          );
+
+        },
+        "image/png"
+      );
+
+    }
+  );
+
+
+  /* =========================================================
+     RESET
+  ========================================================= */
+
+  function resetControls() {
+
+    colsSlider.value =
+      DEFAULTS.cols;
+
+    colsVal.textContent =
+      DEFAULTS.cols;
+
+    rampPreset.value =
+      DEFAULTS.ramp;
+
+    customRamp.value =
+      DEFAULTS.customRamp;
+
+    customField.style.display =
+      "none";
+
+    contrastSlider.value =
+      DEFAULTS.contrast;
+
+    contrastVal.textContent =
+      "1.00";
+
+    brightnessSlider.value =
+      DEFAULTS.brightness;
+
+    brightnessVal.textContent =
+      "0.00";
+
+    samplingSelect.value =
+      DEFAULTS.sampling;
+
+    ditherMode.checked =
+      DEFAULTS.dither;
+
+    colorMode.checked =
+      DEFAULTS.color;
+
+    invertMode.checked =
+      DEFAULTS.invert;
+
+    exportSize.value =
+      DEFAULTS.exportSize;
+
+    exportSizeVal.textContent =
+      `${DEFAULTS.exportSize} px`;
+
+    state.zoom = 1;
+
+    updateZoom();
+
+    setStatus(
+      "Paramètres réinitialisés.",
+      "ok"
+    );
+
+    if (state.sourceCanvas) {
+
+      convertAndRender();
+
+    }
+
+  }
+
+
+  btnReset.addEventListener(
+    "click",
+    resetControls
+  );
+
+
+  /* =========================================================
+     KEYBOARD SHORTCUTS
+  ========================================================= */
+
+  window.addEventListener(
+    "keydown",
+    event => {
+
+      /*
+        Ctrl/Cmd + Enter:
+        force regeneration.
+      */
+
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key === "Enter"
+      ) {
+
+        event.preventDefault();
+
+        if (state.mode === "text") {
+          renderTextSource();
+        } else {
+          convertAndRender();
+        }
+
+      }
+
+    }
+  );
+
+
+  /* =========================================================
+     INITIALIZATION
+  ========================================================= */
+
+  function initialize() {
+
+    colsVal.textContent =
+      colsSlider.value;
+
+    contrastVal.textContent =
+      parseFloat(
+        contrastSlider.value
+      ).toFixed(2);
+
+    brightnessVal.textContent =
+      parseFloat(
+        brightnessSlider.value
+      ).toFixed(2);
+
+    weightVal.textContent =
+      textWeight.value;
+
+    exportSizeVal.textContent =
+      `${exportSize.value} px`;
+
+    zoomLabel.textContent =
+      "100%";
+
+    switchTab("image");
+
+  }
+
+
+  initialize();
+
+})();
+</script>
+
+</body>
+</html>
