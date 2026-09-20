@@ -477,11 +477,18 @@
     color: var(--accent);
   }
 
+  .viewer-stage {
+    position: relative;
+    flex: 1;
+    display: flex;
+    margin: 0 6px 6px;
+    min-height: 440px;
+  }
+
   .canvas-wrap {
     flex: 1;
     background: var(--surface-2);
     border-radius: 7px;
-    margin: 0 6px 6px;
     overflow: auto;
     display: flex;
     align-items: center;
@@ -495,6 +502,43 @@
     font-size: 13.5px;
     font-family: var(--mono);
     text-align: center;
+  }
+
+  .compare-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    display: none;
+    border-radius: 7px;
+    background: var(--surface-2);
+  }
+
+  .compare-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    background: var(--accent);
+    display: none;
+    cursor: ew-resize;
+    touch-action: none;
+  }
+
+  .compare-handle::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--surface);
   }
 
   pre#ascii-out {
@@ -651,6 +695,48 @@
 
       <hr class="sep">
 
+      <!-- PRESETS -->
+      <div class="field">
+
+        <label>Préréglages</label>
+
+        <select id="preset-select">
+          <option value="">— Choisir —</option>
+          <optgroup label="Intégrés">
+            <option value="builtin:poster">Poster net</option>
+            <option value="builtin:terminal">Terminal rétro</option>
+            <option value="builtin:lineart">Line art (contours)</option>
+            <option value="builtin:braillehd">Braille haute densité</option>
+          </optgroup>
+          <optgroup label="Enregistrés" id="preset-custom-group"></optgroup>
+        </select>
+
+      </div>
+
+      <div class="field">
+
+        <input
+          type="text"
+          id="preset-name"
+          placeholder="Nom du préréglage à enregistrer"
+        >
+
+      </div>
+
+      <div class="btn-row">
+
+        <button class="btn btn-small" id="btn-preset-save">
+          Enregistrer
+        </button>
+
+        <button class="btn btn-small" id="btn-preset-delete">
+          Supprimer
+        </button>
+
+      </div>
+
+      <hr class="sep">
+
       <!-- RESOLUTION -->
       <div class="field">
 
@@ -663,9 +749,15 @@
           type="range"
           id="cols"
           min="30"
-          max="220"
+          max="300"
           value="100"
         >
+
+        <div class="hint">
+          Jusqu'à 300 colonnes. Combiné au moteur Braille et à
+          l'échantillonnage Ultra, cela représente plus d'un
+          million de points échantillonnés dans l'image.
+        </div>
 
       </div>
 
@@ -676,6 +768,7 @@
 
         <select id="render-engine">
           <option value="standard" selected>Densité — 1 caractère / cellule</option>
+          <option value="edges">Pro · Contours (Sobel)</option>
           <option value="quarter">Pro · Quart de bloc — 2×2 sous-pixels</option>
           <option value="braille">Pro · Braille — 2×4 sous-pixels</option>
         </select>
@@ -684,6 +777,26 @@
           Un caractère de la rampe par cellule, choisi selon la luminosité.
         </div>
 
+      </div>
+
+      <div
+        class="field"
+        id="edge-threshold-field"
+        style="display:none;"
+      >
+        <label>
+          Seuil de contour
+          <span class="val" id="edge-threshold-val">0.12</span>
+        </label>
+
+        <input
+          type="range"
+          id="edge-threshold"
+          min="0.02"
+          max="0.40"
+          step="0.01"
+          value="0.12"
+        >
       </div>
 
       <div id="ramp-group">
@@ -774,6 +887,7 @@
           <option value="fast">Rapide</option>
           <option value="balanced" selected>Équilibrée</option>
           <option value="quality">Haute qualité</option>
+          <option value="ultra">Pro · Ultra (4×4 sur-échantillonnage)</option>
         </select>
 
       </div>
@@ -825,6 +939,18 @@
 
         <label class="switch">
           <input type="checkbox" id="invert">
+          <span class="slider"></span>
+        </label>
+
+      </div>
+
+      <!-- COMPARE -->
+      <div class="toggle-row">
+
+        <span>Comparaison avant / après</span>
+
+        <label class="switch">
+          <input type="checkbox" id="compare-mode">
           <span class="slider"></span>
         </label>
 
@@ -896,6 +1022,18 @@
 
       </div>
 
+      <div class="btn-row">
+
+        <button class="btn" id="btn-ansi">
+          .ans
+        </button>
+
+        <button class="btn" id="btn-html">
+          .html
+        </button>
+
+      </div>
+
       <button class="btn" id="btn-reset">
         Réinitialiser
       </button>
@@ -951,11 +1089,19 @@
 
       </div>
 
-      <div
-        class="canvas-wrap empty"
-        id="canvas-wrap"
-      >
-        Charge une image ou passe en mode Texte pour commencer
+      <div class="viewer-stage" id="viewer-stage">
+
+        <div
+          class="canvas-wrap empty"
+          id="canvas-wrap"
+        >
+          Charge une image ou passe en mode Texte pour commencer
+        </div>
+
+        <img class="compare-img" id="compare-img" alt="">
+
+        <div class="compare-handle" id="compare-handle"></div>
+
       </div>
 
     </div>
@@ -1059,6 +1205,15 @@
   const renderEngine = $("render-engine");
   const engineHint = $("engine-hint");
   const rampGroup = $("ramp-group");
+  const edgeThresholdField = $("edge-threshold-field");
+  const edgeThreshold = $("edge-threshold");
+  const edgeThresholdVal = $("edge-threshold-val");
+
+  const presetSelect = $("preset-select");
+  const presetCustomGroup = $("preset-custom-group");
+  const presetName = $("preset-name");
+  const btnPresetSave = $("btn-preset-save");
+  const btnPresetDelete = $("btn-preset-delete");
 
   const rampPreset = $("ramp-preset");
   const customField = $("custom-ramp-field");
@@ -1076,12 +1231,16 @@
 
   const colorMode = $("color-mode");
   const invertMode = $("invert");
+  const compareMode = $("compare-mode");
 
   const exportSize = $("export-size");
   const exportSizeVal = $("export-size-val");
   const transparentBg = $("transparent-bg");
 
   const canvasWrap = $("canvas-wrap");
+  const viewerStage = $("viewer-stage");
+  const compareImg = $("compare-img");
+  const compareHandle = $("compare-handle");
 
   const dimsLabel = $("dims-label");
   const statsEl = $("stats");
@@ -1099,6 +1258,8 @@
   const btnTxt = $("btn-txt");
   const btnSvg = $("btn-svg");
   const btnPng = $("btn-png");
+  const btnAnsi = $("btn-ansi");
+  const btnHtml = $("btn-html");
   const btnReset = $("btn-reset");
 
 
@@ -1270,6 +1431,10 @@
         state.sourceType = "image";
 
         updateSourceInfo();
+
+        if (compareMode.checked) {
+          updateCompareImage();
+        }
 
         setStatus("");
 
@@ -1487,6 +1652,10 @@
 
     updateSourceInfo();
 
+    if (compareMode.checked) {
+      updateCompareImage();
+    }
+
     convertAndRender();
 
   }
@@ -1680,7 +1849,9 @@
     }
 
     const samples =
-      quality === "quality" ? 3 : 2;
+      quality === "ultra"
+        ? 4
+        : (quality === "quality" ? 3 : 2);
 
     let totalR = 0;
     let totalG = 0;
@@ -2038,7 +2209,7 @@
     rows =
       Math.min(
         rows,
-        400
+        600
       );
 
     const sourceCtx =
@@ -2095,7 +2266,7 @@
 
     }
 
-    if (engine === "standard") {
+    if (engine === "standard" || engine === "edges") {
 
       const ramp = getRamp();
       const levels = ramp.length;
@@ -2150,6 +2321,30 @@
 
       const gridChars = [];
 
+      /*
+        Sobel edge detection reuses the same
+        dithered density fallback for flat regions,
+        and overlays directional glyphs wherever the
+        local gradient exceeds the chosen threshold.
+      */
+
+      const threshold =
+        engine === "edges"
+          ? parseFloat(edgeThreshold.value)
+          : null;
+
+      function lumAt(x, y) {
+
+        const xx =
+          Math.max(0, Math.min(cols - 1, x));
+
+        const yy =
+          Math.max(0, Math.min(rows - 1, y));
+
+        return lumGrid[yy * cols + xx];
+
+      }
+
       for (let y = 0; y < rows; y++) {
 
         const row = [];
@@ -2158,23 +2353,70 @@
 
           const i = y * cols + x;
 
-          let rampIndex = quant[i];
+          let ch;
 
-          /*
-            Normal mode: dark → dense character.
-          */
+          if (engine === "edges") {
 
-          if (!invert) {
-            rampIndex = levels - 1 - rampIndex;
+            const gx =
+              -lumAt(x - 1, y - 1) + lumAt(x + 1, y - 1) +
+              -2 * lumAt(x - 1, y) + 2 * lumAt(x + 1, y) +
+              -lumAt(x - 1, y + 1) + lumAt(x + 1, y + 1);
+
+            const gy =
+              -lumAt(x - 1, y - 1) - 2 * lumAt(x, y - 1) - lumAt(x + 1, y - 1) +
+              lumAt(x - 1, y + 1) + 2 * lumAt(x, y + 1) + lumAt(x + 1, y + 1);
+
+            const magnitude =
+              Math.sqrt(gx * gx + gy * gy);
+
+            if (magnitude >= threshold) {
+
+              let angle =
+                Math.atan2(gy, gx) + Math.PI / 2;
+
+              angle =
+                ((angle % Math.PI) + Math.PI) % Math.PI;
+
+              const deg =
+                angle * 180 / Math.PI;
+
+              if (deg < 22.5 || deg >= 157.5) {
+                ch = "-";
+              } else if (deg < 67.5) {
+                ch = "\\";
+              } else if (deg < 112.5) {
+                ch = "|";
+              } else {
+                ch = "/";
+              }
+
+            }
+
           }
 
-          rampIndex =
-            Math.max(0, Math.min(levels - 1, rampIndex));
+          if (ch === undefined) {
+
+            let rampIndex = quant[i];
+
+            /*
+              Normal mode: dark → dense character.
+            */
+
+            if (!invert) {
+              rampIndex = levels - 1 - rampIndex;
+            }
+
+            rampIndex =
+              Math.max(0, Math.min(levels - 1, rampIndex));
+
+            ch = ramp[rampIndex];
+
+          }
 
           const c = colorGrid[i];
 
           row.push({
-            ch: ramp[rampIndex],
+            ch,
             r: c.r,
             g: c.g,
             b: c.b,
@@ -2725,8 +2967,22 @@
   );
 
 
+  edgeThreshold.addEventListener(
+    "input",
+    () => {
+
+      edgeThresholdVal.textContent =
+        parseFloat(edgeThreshold.value).toFixed(2);
+
+      liveConvert();
+
+    }
+  );
+
+
   const ENGINE_HINTS = {
     standard: "Un caractère de la rampe par cellule, choisi selon la luminosité.",
+    edges: "Détecte les contours (Sobel) et les dessine avec / \\ | - ; le reste de l'image retombe sur la rampe de densité.",
     quarter: "Chaque cellule affiche un glyphe quart-de-bloc calculé sur 2×2 sous-pixels — le double de résolution dans chaque axe.",
     braille: "Chaque cellule affiche un caractère Braille encodant 2×4 points — jusqu'à 8× plus de détail qu'un caractère de densité."
   };
@@ -2736,11 +2992,14 @@
     "change",
     () => {
 
-      const isStandard =
-        renderEngine.value === "standard";
+      const engine =
+        renderEngine.value;
+
+      const showRamp =
+        engine === "standard" || engine === "edges";
 
       rampGroup.style.display =
-        isStandard ? "flex" : "none";
+        showRamp ? "flex" : "none";
 
       rampGroup.style.flexDirection =
         "column";
@@ -2748,8 +3007,11 @@
       rampGroup.style.gap =
         "18px";
 
+      edgeThresholdField.style.display =
+        engine === "edges" ? "flex" : "none";
+
       engineHint.textContent =
-        ENGINE_HINTS[renderEngine.value] ||
+        ENGINE_HINTS[engine] ||
         ENGINE_HINTS.standard;
 
       liveConvert();
@@ -2892,6 +3154,126 @@
 
     }
   );
+
+
+  /* =========================================================
+     BEFORE / AFTER COMPARISON
+
+     Overlays the original source image over the ASCII
+     preview, clipped by a draggable vertical handle, for a
+     quick visual sanity check of the conversion.
+  ========================================================= */
+
+  let compareDragging = false;
+
+  function updateCompareImage() {
+
+    if (!state.sourceCanvas) {
+      compareImg.removeAttribute("src");
+      return;
+    }
+
+    try {
+
+      compareImg.src =
+        state.sourceCanvas.toDataURL("image/png");
+
+    } catch (error) {
+
+      compareImg.removeAttribute("src");
+
+    }
+
+  }
+
+
+  function setComparePosition(percent) {
+
+    const p =
+      Math.max(0, Math.min(100, percent));
+
+    compareImg.style.clipPath =
+      `inset(0 ${100 - p}% 0 0)`;
+
+    compareHandle.style.left =
+      p + "%";
+
+  }
+
+
+  compareMode.addEventListener(
+    "change",
+    () => {
+
+      const on =
+        compareMode.checked;
+
+      compareImg.style.display =
+        on ? "block" : "none";
+
+      compareHandle.style.display =
+        on ? "block" : "none";
+
+      if (on) {
+
+        updateCompareImage();
+        setComparePosition(50);
+
+      }
+
+    }
+  );
+
+
+  function handleComparePointer(clientX) {
+
+    const rect =
+      viewerStage.getBoundingClientRect();
+
+    const percent =
+      ((clientX - rect.left) / rect.width) * 100;
+
+    setComparePosition(percent);
+
+  }
+
+
+  compareHandle.addEventListener(
+    "pointerdown",
+    event => {
+
+      compareDragging = true;
+
+      try {
+        compareHandle.setPointerCapture(event.pointerId);
+      } catch (error) {}
+
+    }
+  );
+
+
+  compareHandle.addEventListener(
+    "pointermove",
+    event => {
+
+      if (compareDragging) {
+        handleComparePointer(event.clientX);
+      }
+
+    }
+  );
+
+
+  ["pointerup", "pointercancel"].forEach(eventName => {
+
+    compareHandle.addEventListener(
+      eventName,
+      () => {
+        compareDragging = false;
+      }
+    );
+
+  });
 
 
   /* =========================================================
@@ -3339,6 +3721,249 @@
 
 
   /* =========================================================
+     ANSI EXPORT
+
+     Truecolor (24-bit) ANSI escape codes, readable by any
+     modern terminal (iTerm2, Windows Terminal, most Linux
+     terminals). Foreground and background are only emitted
+     when colour mode is on; runs of identical colour are
+     coalesced to keep the file compact.
+  ========================================================= */
+
+  function createAnsi() {
+
+    if (!state.grid) {
+      return null;
+    }
+
+    const {
+      cols,
+      rows,
+      chars
+    } = state.grid;
+
+    const useColor =
+      colorMode.checked;
+
+    let out = "";
+
+    for (let y = 0; y < rows; y++) {
+
+      let lastFg = null;
+      let lastBg = null;
+
+      for (let x = 0; x < cols; x++) {
+
+        const cell =
+          chars[y][x];
+
+        if (useColor) {
+
+          const fg =
+            (cell.r !== null && cell.r !== undefined)
+              ? `${cell.r};${cell.g};${cell.b}`
+              : null;
+
+          const bg =
+            cell.bg
+              ? `${cell.bg.r};${cell.bg.g};${cell.bg.b}`
+              : null;
+
+          if (fg !== lastFg) {
+
+            out +=
+              fg
+                ? `\x1b[38;2;${fg}m`
+                : "\x1b[39m";
+
+            lastFg = fg;
+
+          }
+
+          if (bg !== lastBg) {
+
+            out +=
+              bg
+                ? `\x1b[48;2;${bg}m`
+                : "\x1b[49m";
+
+            lastBg = bg;
+
+          }
+
+        }
+
+        out += cell.ch;
+
+      }
+
+      out += "\x1b[0m\n";
+
+    }
+
+    return out;
+
+  }
+
+
+  btnAnsi.addEventListener(
+    "click",
+    () => {
+
+      const ansi =
+        createAnsi();
+
+      if (!ansi) {
+
+        setStatus(
+          "Rien à exporter pour le moment.",
+          "error"
+        );
+
+        return;
+
+      }
+
+      offerDownload(
+        "opsiom-ascii.ans",
+        ansi,
+        "text/plain;charset=utf-8"
+      );
+
+    }
+  );
+
+
+  /* =========================================================
+     STANDALONE HTML EXPORT
+
+     A small, self-contained HTML document holding the frozen
+     render — handy to drop straight into another page of the
+     Opsiom ecosystem without depending on this tool.
+  ========================================================= */
+
+  function createStandaloneHTML() {
+
+    if (!state.grid) {
+      return null;
+    }
+
+    const {
+      cols,
+      rows,
+      chars
+    } = state.grid;
+
+    const useColor =
+      colorMode.checked;
+
+    const dark =
+      !(
+        window.matchMedia &&
+        window.matchMedia(
+          "(prefers-color-scheme: light)"
+        ).matches
+      );
+
+    const background =
+      dark ? "#0A0B0E" : "#F2F0EA";
+
+    const defaultColor =
+      dark ? "#E8A33D" : "#B5701A";
+
+    let body = "";
+
+    for (let y = 0; y < rows; y++) {
+
+      for (let x = 0; x < cols; x++) {
+
+        const cell =
+          chars[y][x];
+
+        const ch =
+          escapeXml(cell.ch);
+
+        if (useColor) {
+
+          const color =
+            (cell.r !== null && cell.r !== undefined)
+              ? `rgb(${cell.r},${cell.g},${cell.b})`
+              : defaultColor;
+
+          const bgStyle =
+            cell.bg
+              ? `background:rgb(${cell.bg.r},${cell.bg.g},${cell.bg.b});`
+              : "";
+
+          body +=
+            `<span style="color:${color};${bgStyle}">${ch}</span>`;
+
+        } else {
+
+          body += ch;
+
+        }
+
+      }
+
+      body += "\n";
+
+    }
+
+    return (
+      `<!DOCTYPE html>\n` +
+      `<html lang="fr">\n` +
+      `<head>\n` +
+      `<meta charset="UTF-8">\n` +
+      `<title>Opsiom — ASCII</title>\n` +
+      `<style>\n` +
+      `  body { margin:0; min-height:100vh; display:flex; ` +
+      `align-items:center; justify-content:center; ` +
+      `background:${background}; }\n` +
+      `  pre { font-family:'JetBrains Mono', ui-monospace, ` +
+      `Menlo, Consolas, monospace; font-size:10px; ` +
+      `line-height:1; white-space:pre; color:${defaultColor}; ` +
+      `margin:24px; }\n` +
+      `</style>\n` +
+      `</head>\n` +
+      `<body>\n` +
+      `<pre>${body}</pre>\n` +
+      `</body>\n` +
+      `</html>\n`
+    );
+
+  }
+
+
+  btnHtml.addEventListener(
+    "click",
+    () => {
+
+      const html =
+        createStandaloneHTML();
+
+      if (!html) {
+
+        setStatus(
+          "Rien à exporter pour le moment.",
+          "error"
+        );
+
+        return;
+
+      }
+
+      offerDownload(
+        "opsiom-ascii-standalone.html",
+        html,
+        "text/html;charset=utf-8"
+      );
+
+    }
+  );
+
+
+  /* =========================================================
      PNG EXPORT
   ========================================================= */
 
@@ -3537,6 +4162,296 @@
 
 
   /* =========================================================
+     PRESETS
+
+     A handful of built-in combinations, plus custom presets
+     the user can save. Custom presets persist in this
+     browser via localStorage, scoped to this artifact.
+  ========================================================= */
+
+  const PRESET_STORAGE_KEY = "opsiom-ascii-presets";
+
+  const BUILTIN_PRESETS = {
+    poster: {
+      cols: 90, engine: "standard", ramp: "minimal",
+      contrast: 1.3, brightness: 0.02, sampling: "quality",
+      colorSpace: "lab", dither: "floyd-steinberg",
+      color: false, invert: false, edgeThreshold: 0.12
+    },
+    terminal: {
+      cols: 130, engine: "standard", ramp: "dense",
+      contrast: 1.1, brightness: 0, sampling: "balanced",
+      colorSpace: "srgb", dither: "bayer4",
+      color: true, invert: false, edgeThreshold: 0.12
+    },
+    lineart: {
+      cols: 120, engine: "edges", ramp: "minimal",
+      contrast: 1.4, brightness: 0, sampling: "quality",
+      colorSpace: "linear", dither: "none",
+      color: false, invert: false, edgeThreshold: 0.1
+    },
+    braillehd: {
+      cols: 180, engine: "braille", ramp: "standard",
+      contrast: 1.15, brightness: 0, sampling: "ultra",
+      colorSpace: "lab", dither: "floyd-steinberg",
+      color: true, invert: false, edgeThreshold: 0.12
+    }
+  };
+
+
+  function loadCustomPresets() {
+
+    try {
+
+      const raw =
+        window.localStorage.getItem(PRESET_STORAGE_KEY);
+
+      return raw ? JSON.parse(raw) : {};
+
+    } catch (error) {
+
+      return {};
+
+    }
+
+  }
+
+
+  function saveCustomPresets(presets) {
+
+    try {
+
+      window.localStorage.setItem(
+        PRESET_STORAGE_KEY,
+        JSON.stringify(presets)
+      );
+
+    } catch (error) {}
+
+  }
+
+
+  function refreshCustomPresetOptions(selectValue) {
+
+    const presets =
+      loadCustomPresets();
+
+    presetCustomGroup.innerHTML = "";
+
+    Object.keys(presets).forEach(name => {
+
+      const option =
+        document.createElement("option");
+
+      option.value = "custom:" + name;
+      option.textContent = name;
+
+      presetCustomGroup.appendChild(option);
+
+    });
+
+    if (selectValue !== undefined) {
+      presetSelect.value = selectValue;
+    }
+
+  }
+
+
+  function captureCurrentSettings() {
+
+    return {
+      cols: parseInt(colsSlider.value, 10),
+      engine: renderEngine.value,
+      ramp: rampPreset.value,
+      customRamp: customRamp.value,
+      contrast: parseFloat(contrastSlider.value),
+      brightness: parseFloat(brightnessSlider.value),
+      sampling: samplingSelect.value,
+      colorSpace: colorSpaceSelect.value,
+      dither: ditherMethod.value,
+      color: colorMode.checked,
+      invert: invertMode.checked,
+      edgeThreshold: parseFloat(edgeThreshold.value)
+    };
+
+  }
+
+
+  function applyPresetSettings(settings) {
+
+    colsSlider.value = settings.cols;
+    colsVal.textContent = settings.cols;
+
+    renderEngine.value = settings.engine;
+
+    const showRamp =
+      settings.engine === "standard" || settings.engine === "edges";
+
+    rampGroup.style.display = showRamp ? "flex" : "none";
+    rampGroup.style.flexDirection = "column";
+    rampGroup.style.gap = "18px";
+
+    edgeThresholdField.style.display =
+      settings.engine === "edges" ? "flex" : "none";
+
+    engineHint.textContent =
+      ENGINE_HINTS[settings.engine] || ENGINE_HINTS.standard;
+
+    if (settings.ramp) {
+      rampPreset.value = settings.ramp;
+    }
+
+    if (settings.customRamp) {
+      customRamp.value = settings.customRamp;
+    }
+
+    customField.style.display =
+      rampPreset.value === "custom" ? "flex" : "none";
+
+    contrastSlider.value = settings.contrast;
+    contrastVal.textContent = settings.contrast.toFixed(2);
+
+    brightnessSlider.value = settings.brightness;
+    brightnessVal.textContent = settings.brightness.toFixed(2);
+
+    samplingSelect.value = settings.sampling;
+    colorSpaceSelect.value = settings.colorSpace;
+    ditherMethod.value = settings.dither;
+
+    colorMode.checked = settings.color;
+    invertMode.checked = settings.invert;
+
+    edgeThreshold.value = settings.edgeThreshold;
+    edgeThresholdVal.textContent = settings.edgeThreshold.toFixed(2);
+
+    liveConvert();
+
+  }
+
+
+  presetSelect.addEventListener(
+    "change",
+    () => {
+
+      const value =
+        presetSelect.value;
+
+      if (!value) {
+        return;
+      }
+
+      if (value.indexOf("builtin:") === 0) {
+
+        const key =
+          value.slice("builtin:".length);
+
+        const settings =
+          BUILTIN_PRESETS[key];
+
+        if (settings) {
+          applyPresetSettings(settings);
+        }
+
+      } else if (value.indexOf("custom:") === 0) {
+
+        const name =
+          value.slice("custom:".length);
+
+        const presets =
+          loadCustomPresets();
+
+        if (presets[name]) {
+          applyPresetSettings(presets[name]);
+        }
+
+      }
+
+    }
+  );
+
+
+  btnPresetSave.addEventListener(
+    "click",
+    () => {
+
+      const name =
+        (presetName.value || "").trim();
+
+      if (!name) {
+
+        setStatus(
+          "Donne un nom au préréglage avant de l'enregistrer.",
+          "error"
+        );
+
+        return;
+
+      }
+
+      const presets =
+        loadCustomPresets();
+
+      presets[name] =
+        captureCurrentSettings();
+
+      saveCustomPresets(presets);
+
+      refreshCustomPresetOptions("custom:" + name);
+
+      presetName.value = "";
+
+      setStatus(
+        "Préréglage enregistré.",
+        "ok"
+      );
+
+    }
+  );
+
+
+  btnPresetDelete.addEventListener(
+    "click",
+    () => {
+
+      const value =
+        presetSelect.value;
+
+      if (value.indexOf("custom:") !== 0) {
+
+        setStatus(
+          "Choisis d'abord un préréglage enregistré à supprimer.",
+          "error"
+        );
+
+        return;
+
+      }
+
+      const name =
+        value.slice("custom:".length);
+
+      const presets =
+        loadCustomPresets();
+
+      delete presets[name];
+
+      saveCustomPresets(presets);
+
+      refreshCustomPresetOptions("");
+
+      setStatus(
+        "Préréglage supprimé.",
+        "ok"
+      );
+
+    }
+  );
+
+
+  refreshCustomPresetOptions();
+
+
+  /* =========================================================
      RESET
   ========================================================= */
 
@@ -3583,6 +4498,17 @@
 
     samplingSelect.value =
       DEFAULTS.sampling;
+
+    edgeThreshold.value = 0.12;
+    edgeThresholdVal.textContent = "0.12";
+    edgeThresholdField.style.display = "none";
+
+    compareMode.checked = false;
+    compareImg.style.display = "none";
+    compareHandle.style.display = "none";
+
+    presetSelect.value = "";
+    presetName.value = "";
 
     colorMode.checked =
       DEFAULTS.color;
