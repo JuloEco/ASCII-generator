@@ -551,6 +551,12 @@
     transform-origin: center center;
   }
 
+  canvas#ascii-canvas {
+    display: none;
+    transform-origin: center center;
+    image-rendering: auto;
+  }
+
   /* ---------------------------------------------------------
      STATUS / MISC
   --------------------------------------------------------- */
@@ -2616,25 +2622,27 @@
     );
 
     let pre =
-      document.getElementById(
-        "ascii-out"
-      );
+      document.getElementById("ascii-out");
 
-    if (!pre) {
+    let canvas =
+      document.getElementById("ascii-canvas");
 
-      pre =
-        document.createElement(
-          "pre"
-        );
-
-      pre.id =
-        "ascii-out";
+    if (!pre || !canvas) {
 
       canvasWrap.innerHTML = "";
 
-      canvasWrap.appendChild(
-        pre
-      );
+      if (!pre) {
+        pre = document.createElement("pre");
+        pre.id = "ascii-out";
+      }
+
+      if (!canvas) {
+        canvas = document.createElement("canvas");
+        canvas.id = "ascii-canvas";
+      }
+
+      canvasWrap.appendChild(pre);
+      canvasWrap.appendChild(canvas);
 
     }
 
@@ -2652,22 +2660,24 @@
         )
       );
 
-    pre.style.setProperty(
-      "--cell-size",
-      baseCellSize + "px"
-    );
-
-    pre.style.transform =
-      `scale(${state.zoom})`;
-
-
     if (!useColor) {
+
+      canvas.style.display =
+        "none";
+
+      pre.style.display =
+        "block";
+
+      pre.style.setProperty(
+        "--cell-size",
+        baseCellSize + "px"
+      );
+
+      pre.style.transform =
+        `scale(${state.zoom})`;
 
       pre.style.color =
         "var(--text)";
-
-      pre.style.background =
-        "";
 
       const lines =
         new Array(rows);
@@ -2701,106 +2711,118 @@
 
     }
 
+    /*
+      Colour mode is drawn onto a canvas instead of one
+      <span> per character. At high column counts the DOM
+      approach needs tens of thousands of individually
+      coloured inline elements at a 3-6px font size, which
+      forces the browser into subpixel (ClearType-style)
+      text antialiasing — that's what produces the rainbow
+      vertical banding and the directional smearing on
+      soft gradients. Canvas text is rendered at a
+      comfortable internal size with plain grayscale
+      antialiasing, then the browser downsamples the
+      bitmap smoothly via CSS sizing — no fringing, and
+      far fewer DOM nodes.
+    */
 
-    pre.style.color =
-      "";
+    pre.style.display =
+      "none";
 
-    const fragment =
-      document.createDocumentFragment();
+    canvas.style.display =
+      "block";
 
+    const charAspect =
+      getCharacterAspect();
+
+    const internalCellH = 16;
+
+    const internalCellW =
+      Math.max(1, Math.round(internalCellH * charAspect));
+
+    canvas.width = cols * internalCellW;
+    canvas.height = rows * internalCellH;
+
+    const ctx =
+      canvas.getContext("2d");
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.font =
+      `${internalCellH}px "JetBrains Mono", monospace`;
+
+    ctx.textBaseline = "top";
+
+    const fallbackColor =
+      getComputedStyle(canvasWrap)
+        .getPropertyValue("--accent")
+        .trim() || "#E8A33D";
+
+    // Background pass (only cells that declare one).
     for (let y = 0; y < rows; y++) {
 
-      let runFg = null;
-      let runBg = null;
-      let runString = "";
+      for (let x = 0; x < cols; x++) {
 
-      const lineSpans = [];
+        const cell = chars[y][x];
 
-      const flush = () => {
+        if (cell.bg) {
 
-        if (!runString) {
-          return;
-        }
+          ctx.fillStyle =
+            `rgb(${cell.bg.r},${cell.bg.g},${cell.bg.b})`;
 
-        lineSpans.push({
-          fg: runFg,
-          bg: runBg,
-          text: runString
-        });
-
-        runString = "";
-
-      };
-
-      for (
-        let x = 0;
-        x < cols;
-        x++
-      ) {
-
-        const cell =
-          chars[y][x];
-
-        const fg =
-          (cell.r !== null && cell.r !== undefined)
-            ? `rgb(${cell.r},${cell.g},${cell.b})`
-            : "var(--accent)";
-
-        const bg =
-          cell.bg
-            ? `rgb(${cell.bg.r},${cell.bg.g},${cell.bg.b})`
-            : null;
-
-        if (fg !== runFg || bg !== runBg) {
-
-          flush();
-
-          runFg = fg;
-          runBg = bg;
+          ctx.fillRect(
+            x * internalCellW,
+            y * internalCellH,
+            internalCellW,
+            internalCellH
+          );
 
         }
-
-        runString += cell.ch;
 
       }
 
-      flush();
+    }
 
-      lineSpans.forEach(spanData => {
+    // Glyph pass.
+    for (let y = 0; y < rows; y++) {
 
-        const span =
-          document.createElement(
-            "span"
-          );
+      for (let x = 0; x < cols; x++) {
 
-        span.style.color =
-          spanData.fg;
+        const cell = chars[y][x];
 
-        if (spanData.bg) {
-          span.style.background =
-            spanData.bg;
+        if (cell.ch === " ") {
+          continue;
         }
 
-        span.textContent =
-          spanData.text;
+        ctx.fillStyle =
+          (cell.r !== null && cell.r !== undefined)
+            ? `rgb(${cell.r},${cell.g},${cell.b})`
+            : fallbackColor;
 
-        fragment.appendChild(
-          span
+        ctx.fillText(
+          cell.ch,
+          x * internalCellW,
+          y * internalCellH
         );
 
-      });
-
-      fragment.appendChild(
-        document.createTextNode("\n")
-      );
+      }
 
     }
 
-    pre.textContent = "";
+    const baseDisplayWidth =
+      Math.min(900, canvas.width);
 
-    pre.appendChild(
-      fragment
-    );
+    const displayScale =
+      baseDisplayWidth / canvas.width;
+
+    canvas.style.width =
+      (canvas.width * displayScale) + "px";
+
+    canvas.style.height =
+      (canvas.height * displayScale) + "px";
+
+    canvas.style.transform =
+      `scale(${state.zoom})`;
 
     dimsLabel.textContent =
       `${cols} × ${rows}`;
