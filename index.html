@@ -669,39 +669,60 @@
 
       </div>
 
-      <!-- RAMP -->
+      <!-- RENDER ENGINE -->
       <div class="field">
 
-        <label>Jeu de caractères</label>
+        <label>Moteur de rendu</label>
 
-        <select id="ramp-preset">
-          <option value="standard">Standard — .:-=+*#%@</option>
-          <option value="dense">Dense — .:;irsXA253hMHGS#9B&@</option>
-          <option value="blocs">Blocs — ░▒▓█</option>
-          <option value="minimal">Minimal — .oO#@</option>
-          <option value="binaire">Binaire — 01</option>
-          <option value="symbols">Symboles — ·:*#@</option>
-          <option value="custom">Personnalisé</option>
+        <select id="render-engine">
+          <option value="standard" selected>Densité — 1 caractère / cellule</option>
+          <option value="quarter">Pro · Quart de bloc — 2×2 sous-pixels</option>
+          <option value="braille">Pro · Braille — 2×4 sous-pixels</option>
         </select>
+
+        <div class="hint" id="engine-hint">
+          Un caractère de la rampe par cellule, choisi selon la luminosité.
+        </div>
 
       </div>
 
-      <div
-        class="field"
-        id="custom-ramp-field"
-        style="display:none;"
-      >
-        <label>
-          Rampe personnalisée
-          <span class="val">clair → dense</span>
-        </label>
+      <div id="ramp-group">
 
-        <input
-          type="text"
-          id="custom-ramp"
-          value=" .:-=+*#%@"
-          maxlength="32"
+        <!-- RAMP -->
+        <div class="field">
+
+          <label>Jeu de caractères</label>
+
+          <select id="ramp-preset">
+            <option value="standard">Standard — .:-=+*#%@</option>
+            <option value="dense">Dense — .:;irsXA253hMHGS#9B&@</option>
+            <option value="blocs">Blocs — ░▒▓█</option>
+            <option value="minimal">Minimal — .oO#@</option>
+            <option value="binaire">Binaire — 01</option>
+            <option value="symbols">Symboles — ·:*#@</option>
+            <option value="custom">Personnalisé</option>
+          </select>
+
+        </div>
+
+        <div
+          class="field"
+          id="custom-ramp-field"
+          style="display:none;"
         >
+          <label>
+            Rampe personnalisée
+            <span class="val">clair → dense</span>
+          </label>
+
+          <input
+            type="text"
+            id="custom-ramp"
+            value=" .:-=+*#%@"
+            maxlength="32"
+          >
+        </div>
+
       </div>
 
       <!-- CONTRAST -->
@@ -757,15 +778,31 @@
 
       </div>
 
+      <!-- COLOR SPACE -->
+      <div class="field">
+
+        <label>Espace colorimétrique (luminance)</label>
+
+        <select id="color-space">
+          <option value="srgb" selected>sRGB — rapide</option>
+          <option value="linear">Pro · Linéaire — physique</option>
+          <option value="lab">Pro · L* — perceptuel (Lab)</option>
+        </select>
+
+      </div>
+
       <!-- DITHERING -->
-      <div class="toggle-row">
+      <div class="field">
 
-        <span>Dithering Floyd-Steinberg</span>
+        <label>Tramage (dithering)</label>
 
-        <label class="switch">
-          <input type="checkbox" id="dither">
-          <span class="slider"></span>
-        </label>
+        <select id="dither-method">
+          <option value="none" selected>Aucun</option>
+          <option value="floyd-steinberg">Pro · Floyd–Steinberg</option>
+          <option value="bayer2">Pro · Bayer 2×2 (ordonné)</option>
+          <option value="bayer4">Pro · Bayer 4×4 (ordonné)</option>
+          <option value="bayer8">Pro · Bayer 8×8 (ordonné)</option>
+        </select>
 
       </div>
 
@@ -1019,6 +1056,10 @@
   const colsSlider = $("cols");
   const colsVal = $("cols-val");
 
+  const renderEngine = $("render-engine");
+  const engineHint = $("engine-hint");
+  const rampGroup = $("ramp-group");
+
   const rampPreset = $("ramp-preset");
   const customField = $("custom-ramp-field");
   const customRamp = $("custom-ramp");
@@ -1030,8 +1071,9 @@
   const brightnessVal = $("brightness-val");
 
   const samplingSelect = $("sampling");
+  const colorSpaceSelect = $("color-space");
+  const ditherMethod = $("dither-method");
 
-  const ditherMode = $("dither");
   const colorMode = $("color-mode");
   const invertMode = $("invert");
 
@@ -1515,10 +1557,75 @@
 
 
   /* =========================================================
-     LUMINANCE
+     COLOUR SPACE / LIGHTNESS
+
+     Three models are offered:
+
+       - "srgb"   fast, gamma-encoded luminance approximation
+                  (what most simple ASCII converters do).
+
+       - "linear" the sRGB channels are linearised first, then
+                  combined with the Rec.709 luminance weights —
+                  physically correct relative luminance.
+
+       - "lab"    the linear luminance is passed through the
+                  CIE L* response curve, giving a perceptually
+                  uniform lightness (equal steps in the ramp
+                  look like equal steps to the eye).
   ========================================================= */
 
-  function luminance(r, g, b) {
+  function srgbToLinear(c) {
+
+    const cs = c / 255;
+
+    return cs <= 0.04045
+      ? cs / 12.92
+      : Math.pow((cs + 0.055) / 1.055, 2.4);
+
+  }
+
+
+  function computeLightness(r, g, b, space) {
+
+    if (space === "linear" || space === "lab") {
+
+      const R = srgbToLinear(r);
+      const G = srgbToLinear(g);
+      const B = srgbToLinear(b);
+
+      const Y =
+        0.2126 * R +
+        0.7152 * G +
+        0.0722 * B;
+
+      if (space === "linear") {
+        return Y;
+      }
+
+      const ft =
+        Y > 0.008856
+          ? Math.cbrt(Y)
+          : (7.787 * Y + 16 / 116);
+
+      const L =
+        116 * ft - 16;
+
+      return Math.max(
+        0,
+        Math.min(
+          1,
+          L / 100
+        )
+      );
+
+    }
+
+    /*
+      "srgb" — naive gamma-encoded luminance,
+      applied directly to the raw 0-255 channel
+      values. Fast, and matches what most simple
+      ASCII converters produce.
+    */
 
     return (
       0.2126 * r +
@@ -1531,74 +1638,46 @@
 
   /* =========================================================
      SAMPLE SOURCE
+
+     Generalised over an arbitrary sampling grid
+     (used both by the standard cols×rows grid and
+     by the finer sub-pixel grids of the Pro engines).
   ========================================================= */
 
-  function sampleCell(
-    sourceCtx,
-    sourceWidth,
-    sourceHeight,
+  function sampleAt(
+    sourceData,
+    srcW,
+    srcH,
+    gridCols,
+    gridRows,
     x,
     y,
-    cols,
-    rows,
     quality
   ) {
 
-    /*
-      "fast" samples the center pixel.
-
-      "balanced" samples a small 2×2 area.
-
-      "quality" samples an adaptive 3×3 area.
-    */
-
-    const sx =
-      x * sourceWidth / cols;
-
-    const sy =
-      y * sourceHeight / rows;
-
-    const ex =
-      (x + 1) * sourceWidth / cols;
-
-    const ey =
-      (y + 1) * sourceHeight / rows;
+    const sx = x * srcW / gridCols;
+    const sy = y * srcH / gridRows;
+    const ex = (x + 1) * srcW / gridCols;
+    const ey = (y + 1) * srcH / gridRows;
 
     if (quality === "fast") {
 
       const px =
-        Math.min(
-          sourceWidth - 1,
-          Math.floor((sx + ex) / 2)
-        );
+        Math.min(srcW - 1, Math.floor((sx + ex) / 2));
 
       const py =
-        Math.min(
-          sourceHeight - 1,
-          Math.floor((sy + ey) / 2)
-        );
+        Math.min(srcH - 1, Math.floor((sy + ey) / 2));
 
-      const data =
-        sourceCtx.getImageData(
-          px,
-          py,
-          1,
-          1
-        ).data;
+      const index =
+        (py * srcW + px) * 4;
 
       return {
-        r: data[0],
-        g: data[1],
-        b: data[2],
-        lum: luminance(
-          data[0],
-          data[1],
-          data[2]
-        )
+        r: sourceData[index],
+        g: sourceData[index + 1],
+        b: sourceData[index + 2]
       };
 
     }
-
 
     const samples =
       quality === "quality" ? 3 : 2;
@@ -1612,7 +1691,7 @@
 
       const py =
         Math.min(
-          sourceHeight - 1,
+          srcH - 1,
           Math.floor(
             sy +
             ((syi + 0.5) / samples) *
@@ -1624,7 +1703,7 @@
 
         const px =
           Math.min(
-            sourceWidth - 1,
+            srcW - 1,
             Math.floor(
               sx +
               ((sxi + 0.5) / samples) *
@@ -1632,17 +1711,12 @@
             )
           );
 
-        const pixel =
-          sourceCtx.getImageData(
-            px,
-            py,
-            1,
-            1
-          ).data;
+        const index =
+          (py * srcW + px) * 4;
 
-        totalR += pixel[0];
-        totalG += pixel[1];
-        totalB += pixel[2];
+        totalR += sourceData[index];
+        totalG += sourceData[index + 1];
+        totalB += sourceData[index + 2];
 
         count++;
 
@@ -1650,103 +1724,198 @@
 
     }
 
-    const r = totalR / count;
-    const g = totalG / count;
-    const b = totalB / count;
-
     return {
-      r,
-      g,
-      b,
-      lum: luminance(r, g, b)
+      r: totalR / count,
+      g: totalG / count,
+      b: totalB / count
     };
 
   }
 
 
   /* =========================================================
-     DITHERING
+     DITHERING / QUANTIZATION
+
+     Quantizes a [0,1] lightness grid down to `levels`
+     discrete steps (the ramp length for the standard
+     engine, or 2 for the Pro sub-pixel engines).
+
+     Unlike a plain round(), this is what actually makes
+     dithering visible: the error introduced by snapping
+     to the nearest *available* level is tracked and
+     redistributed, so the average tone of a region is
+     preserved even though each cell only has a handful
+     of possible characters to choose from.
   ========================================================= */
 
-  function applyFloydSteinberg(values, cols, rows) {
+  const bayerCache = {};
 
-    const output =
-      new Float32Array(values);
+  function getBayerMatrix(n) {
 
-    function add(x, y, error, factor) {
-
-      if (
-        x < 0 ||
-        x >= cols ||
-        y < 0 ||
-        y >= rows
-      ) {
-        return;
-      }
-
-      output[y * cols + x] +=
-        error * factor;
-
+    if (bayerCache[n]) {
+      return bayerCache[n];
     }
 
-    for (let y = 0; y < rows; y++) {
+    let m = [[0]];
+    let size = 1;
 
-      for (let x = 0; x < cols; x++) {
+    while (size < n) {
 
-        const index =
-          y * cols + x;
+      const newSize = size * 2;
 
-        const oldValue =
-          Math.max(
-            0,
-            Math.min(
-              1,
-              output[index]
-            )
-          );
-
-        output[index] =
-          oldValue;
-
-        /*
-          The actual quantization happens later.
-          We propagate the error relative to
-          the nearest ramp level.
-        */
-
-        add(
-          x + 1,
-          y,
-          oldValue - Math.round(oldValue * 255) / 255,
-          7 / 16
+      const newM =
+        Array.from(
+          { length: newSize },
+          () => new Array(newSize).fill(0)
         );
 
-        add(
-          x - 1,
-          y + 1,
-          oldValue - Math.round(oldValue * 255) / 255,
-          3 / 16
-        );
+      for (let y = 0; y < size; y++) {
 
-        add(
-          x,
-          y + 1,
-          oldValue - Math.round(oldValue * 255) / 255,
-          5 / 16
-        );
+        for (let x = 0; x < size; x++) {
 
-        add(
-          x + 1,
-          y + 1,
-          oldValue - Math.round(oldValue * 255) / 255,
-          1 / 16
-        );
+          const v = m[y][x] * 4;
+
+          newM[y][x] = v;
+          newM[y][x + size] = v + 2;
+          newM[y + size][x] = v + 3;
+          newM[y + size][x + size] = v + 1;
+
+        }
 
       }
 
+      m = newM;
+      size = newSize;
+
     }
 
-    return output;
+    bayerCache[n] = m;
+
+    return m;
+
+  }
+
+
+  function quantizeGrid(lumGrid, cols, rows, levels, method) {
+
+    const idx =
+      new Int32Array(cols * rows);
+
+    if (levels <= 1) {
+      return idx;
+    }
+
+    if (method === "floyd-steinberg") {
+
+      const work =
+        new Float32Array(lumGrid);
+
+      for (let y = 0; y < rows; y++) {
+
+        for (let x = 0; x < cols; x++) {
+
+          const i = y * cols + x;
+
+          const oldValue =
+            Math.max(0, Math.min(1, work[i]));
+
+          const level =
+            Math.round(oldValue * (levels - 1));
+
+          idx[i] = level;
+
+          const quant =
+            level / (levels - 1);
+
+          const err =
+            oldValue - quant;
+
+          if (x + 1 < cols) {
+            work[i + 1] += err * 7 / 16;
+          }
+
+          if (y + 1 < rows) {
+
+            if (x - 1 >= 0) {
+              work[i - 1 + cols] += err * 3 / 16;
+            }
+
+            work[i + cols] += err * 5 / 16;
+
+            if (x + 1 < cols) {
+              work[i + 1 + cols] += err * 1 / 16;
+            }
+
+          }
+
+        }
+
+      }
+
+      return idx;
+
+    }
+
+    if (method && method.indexOf("bayer") === 0) {
+
+      const n =
+        parseInt(method.replace("bayer", ""), 10) || 4;
+
+      const matrix =
+        getBayerMatrix(n);
+
+      const total =
+        n * n;
+
+      for (let y = 0; y < rows; y++) {
+
+        for (let x = 0; x < cols; x++) {
+
+          const i = y * cols + x;
+
+          const threshold =
+            (matrix[y % n][x % n] + 0.5) / total - 0.5;
+
+          const adjusted =
+            lumGrid[i] + threshold / (levels - 1);
+
+          idx[i] =
+            Math.max(
+              0,
+              Math.min(
+                levels - 1,
+                Math.round(
+                  Math.max(0, Math.min(1, adjusted)) * (levels - 1)
+                )
+              )
+            );
+
+        }
+
+      }
+
+      return idx;
+
+    }
+
+    /*
+      No dithering — straight nearest-level rounding.
+    */
+
+    for (let i = 0; i < cols * rows; i++) {
+
+      idx[i] =
+        Math.max(
+          0,
+          Math.min(
+            levels - 1,
+            Math.round(lumGrid[i] * (levels - 1))
+          )
+        );
+
+    }
+
+    return idx;
 
   }
 
@@ -1811,6 +1980,37 @@
   }
 
 
+  /*
+    Quadrant block glyphs, indexed by a 4-bit mask
+    where bit0=top-left, bit1=top-right,
+    bit2=bottom-left, bit3=bottom-right.
+  */
+  const QUARTER_GLYPHS = [
+    " ", "▘", "▝", "▀",
+    "▖", "▌", "▞", "▛",
+    "▗", "▚", "▐", "▜",
+    "▄", "▙", "▟", "█"
+  ];
+
+  /*
+    Sub-pixel positions for each Pro engine, as
+    [sx, sy, bit] triples within their sampling
+    cell (2×2 for quarter blocks, 2×4 for Braille,
+    matching the standard Unicode Braille dot
+    numbering: 1 4 / 2 5 / 3 6 / 7 8).
+  */
+  const ENGINE_POSITIONS = {
+    quarter: [
+      [0, 0, 0], [1, 0, 1],
+      [0, 1, 2], [1, 1, 3]
+    ],
+    braille: [
+      [0, 0, 0], [0, 1, 1], [0, 2, 2], [0, 3, 6],
+      [1, 0, 3], [1, 1, 4], [1, 2, 5], [1, 3, 7]
+    ]
+  };
+
+
   function performConversion() {
 
     const src =
@@ -1841,12 +2041,6 @@
         400
       );
 
-    /*
-      Instead of shrinking the source to the ASCII
-      resolution, we keep the source at its natural
-      size and sample areas from it.
-    */
-
     const sourceCtx =
       src.getContext(
         "2d",
@@ -1855,18 +2049,11 @@
         }
       );
 
-    const ramp =
-      getRamp();
-
     const contrast =
-      parseFloat(
-        contrastSlider.value
-      );
+      parseFloat(contrastSlider.value);
 
     const brightness =
-      parseFloat(
-        brightnessSlider.value
-      );
+      parseFloat(brightnessSlider.value);
 
     const invert =
       invertMode.checked;
@@ -1877,11 +2064,18 @@
     const quality =
       samplingSelect.value;
 
-    /*
-      Cache source image data once.
+    const space =
+      colorSpaceSelect.value;
 
-      This is significantly faster than calling
-      getImageData() for every individual cell.
+    const method =
+      ditherMethod.value;
+
+    const engine =
+      renderEngine.value;
+
+    /*
+      Cache source image data once — far faster than
+      calling getImageData() per sampled cell.
     */
 
     const sourceData =
@@ -1892,283 +2086,265 @@
         src.height
       ).data;
 
+    function toneCurve(lum) {
 
-    function getSampleFromData(
-      x,
-      y
-    ) {
+      const v =
+        (lum - 0.5) * contrast + 0.5 + brightness;
 
-      const sx =
-        x * src.width / cols;
+      return Math.max(0, Math.min(1, v));
 
-      const sy =
-        y * src.height / rows;
+    }
 
-      const ex =
-        (x + 1) * src.width / cols;
+    if (engine === "standard") {
 
-      const ey =
-        (y + 1) * src.height / rows;
+      const ramp = getRamp();
+      const levels = ramp.length;
 
+      const lumGrid =
+        new Float32Array(cols * rows);
 
-      if (quality === "fast") {
+      const colorGrid =
+        new Array(cols * rows);
 
-        const px =
-          Math.min(
-            src.width - 1,
-            Math.floor((sx + ex) / 2)
-          );
+      for (let y = 0; y < rows; y++) {
 
-        const py =
-          Math.min(
-            src.height - 1,
-            Math.floor((sy + ey) / 2)
-          );
+        for (let x = 0; x < cols; x++) {
 
-        const index =
-          (py * src.width + px) * 4;
+          const i = y * cols + x;
 
-        const r =
-          sourceData[index];
-
-        const g =
-          sourceData[index + 1];
-
-        const b =
-          sourceData[index + 2];
-
-        return {
-          r,
-          g,
-          b,
-          lum: luminance(r, g, b)
-        };
-
-      }
-
-
-      const samples =
-        quality === "quality" ? 3 : 2;
-
-      let totalR = 0;
-      let totalG = 0;
-      let totalB = 0;
-      let count = 0;
-
-      for (
-        let syi = 0;
-        syi < samples;
-        syi++
-      ) {
-
-        const py =
-          Math.min(
-            src.height - 1,
-            Math.floor(
-              sy +
-              ((syi + 0.5) / samples) *
-              Math.max(1, ey - sy)
-            )
-          );
-
-        for (
-          let sxi = 0;
-          sxi < samples;
-          sxi++
-        ) {
-
-          const px =
-            Math.min(
-              src.width - 1,
-              Math.floor(
-                sx +
-                ((sxi + 0.5) / samples) *
-                Math.max(1, ex - sx)
-              )
+          const s =
+            sampleAt(
+              sourceData,
+              src.width,
+              src.height,
+              cols,
+              rows,
+              x,
+              y,
+              quality
             );
 
-          const index =
-            (py * src.width + px) * 4;
+          lumGrid[i] =
+            toneCurve(
+              computeLightness(s.r, s.g, s.b, space)
+            );
 
-          totalR += sourceData[index];
-          totalG += sourceData[index + 1];
-          totalB += sourceData[index + 2];
-
-          count++;
+          colorGrid[i] = {
+            r: Math.round(s.r),
+            g: Math.round(s.g),
+            b: Math.round(s.b)
+          };
 
         }
 
       }
 
-      const r =
-        totalR / count;
-
-      const g =
-        totalG / count;
-
-      const b =
-        totalB / count;
-
-      return {
-        r,
-        g,
-        b,
-        lum: luminance(r, g, b)
-      };
-
-    }
-
-
-    const luminances =
-      new Float32Array(
-        cols * rows
-      );
-
-    const colors =
-      new Array(
-        cols * rows
-      );
-
-
-    for (let y = 0; y < rows; y++) {
-
-      for (let x = 0; x < cols; x++) {
-
-        const index =
-          y * cols + x;
-
-        const sample =
-          getSampleFromData(
-            x,
-            y
-          );
-
-        let lum =
-          sample.lum;
-
-        lum =
-          (lum - 0.5) *
-          contrast +
-          0.5 +
-          brightness;
-
-        lum =
-          Math.max(
-            0,
-            Math.min(
-              1,
-              lum
-            )
-          );
-
-        luminances[index] =
-          lum;
-
-        colors[index] = {
-          r: Math.round(sample.r),
-          g: Math.round(sample.g),
-          b: Math.round(sample.b)
-        };
-
-      }
-
-    }
-
-
-    /*
-      Dithering.
-
-      We apply it to the normalized luminance
-      before converting it to a ramp character.
-    */
-
-    let processedLum =
-      luminances;
-
-    if (ditherMode.checked) {
-
-      processedLum =
-        applyFloydSteinberg(
-          luminances,
+      const quant =
+        quantizeGrid(
+          lumGrid,
           cols,
-          rows
+          rows,
+          levels,
+          method
         );
 
-    }
+      const gridChars = [];
 
+      for (let y = 0; y < rows; y++) {
 
-    const gridChars = [];
+        const row = [];
 
-    for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
 
-      const row = [];
+          const i = y * cols + x;
 
-      for (let x = 0; x < cols; x++) {
+          let rampIndex = quant[i];
 
-        const index =
-          y * cols + x;
+          /*
+            Normal mode: dark → dense character.
+          */
 
-        let lum =
-          Math.max(
-            0,
-            Math.min(
-              1,
-              processedLum[index]
-            )
-          );
-
-        let rampIndex =
-          Math.round(
-            lum *
-            (ramp.length - 1)
-          );
-
-        /*
-          Normal mode:
-          black → dense character
-          white → light character
-        */
-
-        if (!invert) {
+          if (!invert) {
+            rampIndex = levels - 1 - rampIndex;
+          }
 
           rampIndex =
-            ramp.length -
-            1 -
-            rampIndex;
+            Math.max(0, Math.min(levels - 1, rampIndex));
+
+          const c = colorGrid[i];
+
+          row.push({
+            ch: ramp[rampIndex],
+            r: c.r,
+            g: c.g,
+            b: c.b,
+            bg: null
+          });
 
         }
 
-        rampIndex =
-          Math.max(
-            0,
-            Math.min(
-              ramp.length - 1,
-              rampIndex
-            )
-          );
-
-        const color =
-          colors[index];
-
-        row.push({
-          ch: ramp[rampIndex],
-          r: color.r,
-          g: color.g,
-          b: color.b
-        });
+        gridChars.push(row);
 
       }
 
-      gridChars.push(row);
+      state.grid = { cols, rows, chars: gridChars, engine };
+
+    } else {
+
+      /*
+        Pro sub-pixel engines: sample a finer grid
+        (2×2 for quarter blocks, 2×4 for Braille),
+        threshold each sub-pixel to black/white with
+        the same dithering machinery, then pack the
+        pattern into a single Unicode glyph.
+      */
+
+      const subW = 2;
+      const subH = engine === "braille" ? 4 : 2;
+
+      const subCols = cols * subW;
+      const subRows = rows * subH;
+
+      const lumGrid =
+        new Float32Array(subCols * subRows);
+
+      const colorGrid =
+        new Array(subCols * subRows);
+
+      for (let y = 0; y < subRows; y++) {
+
+        for (let x = 0; x < subCols; x++) {
+
+          const i = y * subCols + x;
+
+          const s =
+            sampleAt(
+              sourceData,
+              src.width,
+              src.height,
+              subCols,
+              subRows,
+              x,
+              y,
+              quality
+            );
+
+          lumGrid[i] =
+            toneCurve(
+              computeLightness(s.r, s.g, s.b, space)
+            );
+
+          colorGrid[i] = { r: s.r, g: s.g, b: s.b };
+
+        }
+
+      }
+
+      const quant =
+        quantizeGrid(
+          lumGrid,
+          subCols,
+          subRows,
+          2,
+          method
+        );
+
+      function isOn(idx) {
+        return invert ? idx === 1 : idx === 0;
+      }
+
+      const positions =
+        ENGINE_POSITIONS[engine];
+
+      const gridChars = [];
+
+      for (let cy = 0; cy < rows; cy++) {
+
+        const row = [];
+
+        for (let cx = 0; cx < cols; cx++) {
+
+          let mask = 0;
+
+          let onR = 0, onG = 0, onB = 0, onCount = 0;
+          let offR = 0, offG = 0, offB = 0, offCount = 0;
+
+          for (const [sx, sy, bit] of positions) {
+
+            const gx = cx * subW + sx;
+            const gy = cy * subH + sy;
+            const i = gy * subCols + gx;
+
+            const on = isOn(quant[i]);
+            const col = colorGrid[i];
+
+            if (on) {
+
+              mask |= (1 << bit);
+
+              onR += col.r;
+              onG += col.g;
+              onB += col.b;
+              onCount++;
+
+            } else {
+
+              offR += col.r;
+              offG += col.g;
+              offB += col.b;
+              offCount++;
+
+            }
+
+          }
+
+          const ch =
+            engine === "braille"
+              ? (mask === 0 ? " " : String.fromCodePoint(0x2800 + mask))
+              : QUARTER_GLYPHS[mask];
+
+          let cellColor = null;
+          let bg = null;
+
+          if (useColor) {
+
+            cellColor =
+              onCount
+                ? {
+                    r: Math.round(onR / onCount),
+                    g: Math.round(onG / onCount),
+                    b: Math.round(onB / onCount)
+                  }
+                : null;
+
+            bg =
+              (offCount && mask !== 0 && mask !== 15)
+                ? {
+                    r: Math.round(offR / offCount),
+                    g: Math.round(offG / offCount),
+                    b: Math.round(offB / offCount)
+                  }
+                : null;
+
+          }
+
+          row.push({
+            ch,
+            r: cellColor ? cellColor.r : null,
+            g: cellColor ? cellColor.g : null,
+            b: cellColor ? cellColor.b : null,
+            bg
+          });
+
+        }
+
+        gridChars.push(row);
+
+      }
+
+      state.grid = { cols, rows, chars: gridChars, engine };
 
     }
-
-
-    state.grid = {
-      cols,
-      rows,
-      chars: gridChars
-    };
 
     renderGrid();
 
@@ -2245,6 +2421,12 @@
 
     if (!useColor) {
 
+      pre.style.color =
+        "var(--text)";
+
+      pre.style.background =
+        "";
+
       const lines =
         new Array(rows);
 
@@ -2267,99 +2449,116 @@
 
       }
 
-      pre.style.color =
-        "var(--text)";
-
       pre.textContent =
         lines.join("\n");
 
-    } else {
+      dimsLabel.textContent =
+        `${cols} × ${rows}`;
 
-      const fragment =
-        document.createDocumentFragment();
+      return;
 
-      for (let y = 0; y < rows; y++) {
+    }
 
-        let runColor = null;
-        let runString = "";
 
-        const lineSpans = [];
+    pre.style.color =
+      "";
 
-        for (
-          let x = 0;
-          x < cols;
-          x++
-        ) {
+    const fragment =
+      document.createDocumentFragment();
 
-          const cell =
-            chars[y][x];
+    for (let y = 0; y < rows; y++) {
 
-          const color =
-            `rgb(${cell.r},${cell.g},${cell.b})`;
+      let runFg = null;
+      let runBg = null;
+      let runString = "";
 
-          if (color !== runColor) {
+      const lineSpans = [];
 
-            if (runString) {
+      const flush = () => {
 
-              lineSpans.push({
-                color: runColor,
-                text: runString
-              });
-
-            }
-
-            runColor = color;
-            runString = cell.ch;
-
-          } else {
-
-            runString += cell.ch;
-
-          }
-
+        if (!runString) {
+          return;
         }
 
-        if (runString) {
-
-          lineSpans.push({
-            color: runColor,
-            text: runString
-          });
-
-        }
-
-        lineSpans.forEach(spanData => {
-
-          const span =
-            document.createElement(
-              "span"
-            );
-
-          span.style.color =
-            spanData.color;
-
-          span.textContent =
-            spanData.text;
-
-          fragment.appendChild(
-            span
-          );
-
+        lineSpans.push({
+          fg: runFg,
+          bg: runBg,
+          text: runString
         });
 
-        fragment.appendChild(
-          document.createTextNode("\n")
-        );
+        runString = "";
+
+      };
+
+      for (
+        let x = 0;
+        x < cols;
+        x++
+      ) {
+
+        const cell =
+          chars[y][x];
+
+        const fg =
+          (cell.r !== null && cell.r !== undefined)
+            ? `rgb(${cell.r},${cell.g},${cell.b})`
+            : "var(--accent)";
+
+        const bg =
+          cell.bg
+            ? `rgb(${cell.bg.r},${cell.bg.g},${cell.bg.b})`
+            : null;
+
+        if (fg !== runFg || bg !== runBg) {
+
+          flush();
+
+          runFg = fg;
+          runBg = bg;
+
+        }
+
+        runString += cell.ch;
 
       }
 
-      pre.textContent = "";
+      flush();
 
-      pre.appendChild(
-        fragment
+      lineSpans.forEach(spanData => {
+
+        const span =
+          document.createElement(
+            "span"
+          );
+
+        span.style.color =
+          spanData.fg;
+
+        if (spanData.bg) {
+          span.style.background =
+            spanData.bg;
+        }
+
+        span.textContent =
+          spanData.text;
+
+        fragment.appendChild(
+          span
+        );
+
+      });
+
+      fragment.appendChild(
+        document.createTextNode("\n")
       );
 
     }
+
+    pre.textContent = "";
+
+    pre.appendChild(
+      fragment
+    );
 
     dimsLabel.textContent =
       `${cols} × ${rows}`;
@@ -2380,7 +2579,8 @@
 
     const {
       cols,
-      rows
+      rows,
+      engine
     } = state.grid;
 
     const characters =
@@ -2389,10 +2589,26 @@
     const source =
       state.sourceCanvas;
 
+    const engineLabel =
+      engine === "braille"
+        ? "Braille 2×4"
+        : engine === "quarter"
+          ? "Quart de bloc 2×2"
+          : "Densité";
+
+    const subRes =
+      engine === "braille"
+        ? `${cols * 2} × ${rows * 4} sous-pixels`
+        : engine === "quarter"
+          ? `${cols * 2} × ${rows * 2} sous-pixels`
+          : null;
+
     statsEl.innerHTML =
       `SOURCE ${source.width} × ${source.height}<br>` +
       `SORTIE ${cols} × ${rows} · ` +
-      `${characters.toLocaleString("fr-FR")} caractères`;
+      `${characters.toLocaleString("fr-FR")} caractères<br>` +
+      `MOTEUR ${engineLabel}` +
+      (subRes ? `<br>RÉSOLUTION EFFECTIVE ${subRes}` : "");
 
   }
 
@@ -2497,15 +2713,54 @@
   );
 
 
-  ditherMode.addEventListener(
+  colorSpaceSelect.addEventListener(
     "change",
     liveConvert
   );
 
 
+  ditherMethod.addEventListener(
+    "change",
+    liveConvert
+  );
+
+
+  const ENGINE_HINTS = {
+    standard: "Un caractère de la rampe par cellule, choisi selon la luminosité.",
+    quarter: "Chaque cellule affiche un glyphe quart-de-bloc calculé sur 2×2 sous-pixels — le double de résolution dans chaque axe.",
+    braille: "Chaque cellule affiche un caractère Braille encodant 2×4 points — jusqu'à 8× plus de détail qu'un caractère de densité."
+  };
+
+
+  renderEngine.addEventListener(
+    "change",
+    () => {
+
+      const isStandard =
+        renderEngine.value === "standard";
+
+      rampGroup.style.display =
+        isStandard ? "flex" : "none";
+
+      rampGroup.style.flexDirection =
+        "column";
+
+      rampGroup.style.gap =
+        "18px";
+
+      engineHint.textContent =
+        ENGINE_HINTS[renderEngine.value] ||
+        ENGINE_HINTS.standard;
+
+      liveConvert();
+
+    }
+  );
+
+
   colorMode.addEventListener(
     "change",
-    renderGrid
+    liveConvert
   );
 
 
@@ -2917,6 +3172,11 @@
         ? "#0A0B0E"
         : "#F2F0EA";
 
+    const defaultColor =
+      dark
+        ? "#E8A33D"
+        : "#B5701A";
+
     let svg =
       `<svg xmlns="http://www.w3.org/2000/svg" ` +
       `width="${width}" ` +
@@ -2928,6 +3188,47 @@
       svg +=
         `<rect width="100%" height="100%" ` +
         `fill="${background}"/>`;
+
+    }
+
+    if (useColor) {
+
+      for (let y = 0; y < rows; y++) {
+
+        let runBg = null;
+        let runStart = -1;
+
+        for (let x = 0; x <= cols; x++) {
+
+          const cell =
+            x < cols ? chars[y][x] : null;
+
+          const bg =
+            (cell && cell.bg)
+              ? `rgb(${cell.bg.r},${cell.bg.g},${cell.bg.b})`
+              : null;
+
+          if (bg !== runBg) {
+
+            if (runBg) {
+
+              svg +=
+                `<rect x="${runStart * cellW}" ` +
+                `y="${y * cellH}" ` +
+                `width="${(x - runStart) * cellW}" ` +
+                `height="${cellH}" ` +
+                `fill="${runBg}"/>`;
+
+            }
+
+            runBg = bg;
+            runStart = x;
+
+          }
+
+        }
+
+      }
 
     }
 
@@ -2954,12 +3255,12 @@
 
         const color =
           useColor
-            ? `rgb(${cell.r},${cell.g},${cell.b})`
-            : (
-              dark
-                ? "#E8A33D"
-                : "#B5701A"
-            );
+            ? (
+              (cell.r !== null && cell.r !== undefined)
+                ? `rgb(${cell.r},${cell.g},${cell.b})`
+                : defaultColor
+            )
+            : defaultColor;
 
         if (
           currentColor !== null &&
@@ -3144,6 +3445,35 @@
           ? "#E8A33D"
           : "#B5701A";
 
+      if (useColor) {
+
+        for (let y = 0; y < rows; y++) {
+
+          for (let x = 0; x < cols; x++) {
+
+            const cell =
+              chars[y][x];
+
+            if (cell.bg) {
+
+              ctx.fillStyle =
+                `rgb(${cell.bg.r},${cell.bg.g},${cell.bg.b})`;
+
+              ctx.fillRect(
+                x * cellW,
+                y * cellH,
+                cellW,
+                cellH
+              );
+
+            }
+
+          }
+
+        }
+
+      }
+
       for (
         let y = 0;
         y < rows;
@@ -3161,7 +3491,11 @@
 
           ctx.fillStyle =
             useColor
-              ? `rgb(${cell.r},${cell.g},${cell.b})`
+              ? (
+                (cell.r !== null && cell.r !== undefined)
+                  ? `rgb(${cell.r},${cell.g},${cell.b})`
+                  : defaultColor
+              )
               : defaultColor;
 
           ctx.fillText(
@@ -3214,6 +3548,18 @@
     colsVal.textContent =
       DEFAULTS.cols;
 
+    renderEngine.value = "standard";
+
+    rampGroup.style.display = "flex";
+    rampGroup.style.flexDirection = "column";
+    rampGroup.style.gap = "18px";
+
+    engineHint.textContent =
+      ENGINE_HINTS.standard;
+
+    colorSpaceSelect.value = "srgb";
+    ditherMethod.value = "none";
+
     rampPreset.value =
       DEFAULTS.ramp;
 
@@ -3237,9 +3583,6 @@
 
     samplingSelect.value =
       DEFAULTS.sampling;
-
-    ditherMode.checked =
-      DEFAULTS.dither;
 
     colorMode.checked =
       DEFAULTS.color;
